@@ -1,0 +1,7 @@
+[project]
+name = "spatch"
+authors = [
+    {name = "Jarrod Millman", email = "millman@berkeley.edu"},
+]
+version = "0.0.0"
+description = "Coming soon"
