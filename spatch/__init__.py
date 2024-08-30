@@ -64,7 +64,7 @@ class Backend:
         matches = False
         unknown_types = []
         for t in types:
-            ident = f"{t.__module__}:{t.__qualname__}"
+            ident = get_identifier(t)
 
             if ident in self.type_names:
                 matches = True
