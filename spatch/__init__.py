@@ -1,7 +1,9 @@
 import inspect
 import functools
 import importlib
+import importlib_metadata
 import textwrap
+import warnings
 
 
 def get_identifier(obj):
@@ -74,17 +76,27 @@ class Backend:
 
 
 class BackendSystem:
-    def __init__(self):
+    def __init__(self, group):
+        # TODO: Should we use group and name, or is group enough?
         # TODO: We could define types of the fallback here, or known "scalar"
         #       (i.e. unimportant types).
         #       In a sense, the fallback should maybe itself just be a normal
         #       backend, except we always try it if all else fails...
         self.backends = {}
 
+        eps = importlib_metadata.entry_points(group=group)
+        for ep in eps:
+            self.backend_from_dict(ep.load())
+
+        print(self.backends)
+
     def backend_from_dict(self, info_dict):
         new_backend = Backend.from_info_dict(info_dict)
         if new_backend.name in self.backends:
-            raise ValueError(f"Backend of name '{new_backend.name}' already exists!")
+            warnings.warn(
+                UserWarning,
+                f"Backend of name '{new_backend.name}' already exists. Ignoring second!")
+            return
         self.backends[new_backend.name] = new_backend
 
     def dispatchable(self, *relevant_args):
@@ -121,16 +133,18 @@ class Dispatchable:
         new_doc = []
         for backend in backend_system.backends.values():
             info = backend.symbol_mapping.get(ident, None)
-            self._implementations.append((backend, info["impl_symbol"]))
+            print(backend.symbol_mapping, ident)
             if info is None:
-                continue
+                continue  # not implemented by backend (apparently)
+
+            self._implementations.append((backend, info["impl_symbol"]))
 
             impl_symbol = info["impl_symbol"]
             doc_blurp = info.get("doc_blurp", "No backend documentation available.")
             new_doc.append(f"backend.name :\n" + textwrap.indent(doc_blurp, "    "))
 
         if not new_doc:
-            new_doc = "No backends found for this function."
+            new_doc = ["No backends found for this function."]
 
         new_doc = "\n\n".join(new_doc)
         new_doc = "\n\nBackends\n--------\n" + new_doc

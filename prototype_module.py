@@ -1,12 +1,7 @@
 # This is a silly module that might be used by a user.
 from spatch import Backend, BackendSystem, WillNotHandle
 
-_backend_sys = BackendSystem()
-
-# This part would have to happen through entry-points:
-from prototype_backend import backend_info
-
-_backend_sys.backend_from_dict(backend_info)
+_backend_sys = BackendSystem("prototype_modules_backends")
 
 
 @_backend_sys.dispatchable("arg", "optional")

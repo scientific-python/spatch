@@ -5,3 +5,7 @@ authors = [
 ]
 version = "0.0.0"
 description = "Coming soon"
+
+
+[project.entry-points.prototype_modules_backends]
+my_backend = 'prototype_backend:backend_info'

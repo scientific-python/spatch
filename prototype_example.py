@@ -10,5 +10,5 @@ print("\n\nTrivial call examples:\n")
 print(prototype_module.func1([1, 2, 3]))
 print(prototype_module.func1(np.matrix([1, 2, 3])))
 
-print("\nNobody can handle this")
+print("\nNobody can handle this example:")
 prototype_module.func1(np.matrix([1, 2, 3]), parameter="uhoh!")
