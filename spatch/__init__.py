@@ -114,6 +114,8 @@ class BackendSystem:
             if module is not None:
                 disp.__module__ = module
 
+            return disp
+
         return wrap_callable
 
 class Dispatchable:
