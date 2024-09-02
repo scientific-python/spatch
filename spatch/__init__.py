@@ -99,7 +99,7 @@ class BackendSystem:
             return
         self.backends[new_backend.name] = new_backend
 
-    def dispatchable(self, *relevant_args):
+    def dispatchable(self, *relevant_args, module=None):
         """
         Decorate a Python function with information on how to extract
         the "relevant" arguments, i.e. arguments we wish to dispatch for.
@@ -110,7 +110,9 @@ class BackendSystem:
                 map these correctly).
         """
         def wrap_callable(func):
-            return Dispatchable(self, func, relevant_args)
+            disp = Dispatchable(self, func, relevant_args)
+            if module is not None:
+                disp.__module__ = module
 
         return wrap_callable
 

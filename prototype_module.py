@@ -1,5 +1,5 @@
 # This is a silly module that might be used by a user.
-from spatch import Backend, BackendSystem, WillNotHandle
+from spatch import BackendSystem, WillNotHandle
 
 _backend_sys = BackendSystem("prototype_modules_backends")
 
