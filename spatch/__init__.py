@@ -110,9 +110,11 @@ class BackendSystem:
                 map these correctly).
         """
         def wrap_callable(func):
-            disp = Dispatchable(self, func, relevant_args)
+            # Overwrite original module (we use it later, could also pass it)
             if module is not None:
-                disp.__module__ = module
+                func.__module__ = module
+
+            disp = Dispatchable(self, func, relevant_args)
 
             return disp
 
@@ -122,7 +124,7 @@ class Dispatchable:
     """Dispatchable function object
 
     """
-    def __init__(self, backend_system, func, relevant_args):
+    def __init__(self, backend_system, func, relevant_args, ident=None):
         self._backend_system = backend_system
         self._sig = inspect.signature(func)
         self._relevant_args = relevant_args
