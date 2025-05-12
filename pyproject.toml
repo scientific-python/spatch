@@ -5,3 +5,6 @@ authors = [
 ]
 version = "0.0.0"
 description = "Coming soon"
+
+[project.entry-points._spatch_example_backends]
+my_backend = 'spatch._spatch_example.entry_point'

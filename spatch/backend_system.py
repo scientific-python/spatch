@@ -1,4 +1,9 @@
+
 import functools
+import importlib
+import importlib_metadata
+import warnings
+import textwrap
 from types import MethodType
 
 
@@ -19,24 +24,27 @@ def from_identifier(ident):
 
 class Backend:
     @classmethod
-    def from_info_dict(cls, info_dict):
+    def from_namespace(cls, info):
         self = cls()
-        self.name = info_dict["name"]
-        self.symbol_mapping = info_dict["functions"]
+        self.name = info.name
+        self.functions = info.functions
 
-        self.primary_types = frozenset(info_dict["primary_types"])
-        self.secondary_types = frozenset(info_dict["secondary_types"])
+        self.primary_types = frozenset(info.primary_types)
+        self.secondary_types = frozenset(info.secondary_types)
         self.supported_types = self.primary_types | self.secondary_types
-        self.known_backends = frozenset(info_dict["known_backends"])
+        self.known_backends = frozenset(
+            info.known_backends if hasattr(info, "known_backends") else []
+        )
+        return self
 
     def matches(self, relevant_type):
         # The default implementation (for now only one) uses exact checks on the
         # type string.
         type_strs = frozenset(get_identifier(t) for t in relevant_type)
 
-        if type_strs.is_disjoint(self.primary_types):
+        if type_strs.isdisjoint(self.primary_types):
             return False
-        elif type_strs.is_subset(self.supported_types):
+        elif type_strs.issubset(self.supported_types):
             return True
         else:
             return False
@@ -60,8 +68,8 @@ class BackendSystem:
 
         print(self.backends)
 
-    def backend_from_dict(self, info_dict):
-        new_backend = Backend.from_info_dict(info_dict)
+    def backend_from_dict(self, info_namespace):
+        new_backend = Backend.from_namespace(info_namespace)
         if new_backend.name in self.backends:
             warnings.warn(
                 UserWarning,
@@ -69,7 +77,7 @@ class BackendSystem:
             return
         self.backends[new_backend.name] = new_backend
 
-    def dispatchable(self, *relevant_args, module=None):
+    def dispatchable(self, relevant_args, module=None):
         """
         Decorate a Python function with information on how to extract
         the "relevant" arguments, i.e. arguments we wish to dispatch for.
@@ -122,8 +130,10 @@ class Dispatchable:
     def __init__(self, backend_system, func, relevant_args, ident=None):
         self._backend_system = backend_system
         self._default_func = func
-        self._relevant_args = relevant_args
-        self._ident = ident if ident is not None else get_identifier(func)
+        if ident is None:
+            ident = get_identifier(func)
+
+        self._ident = ident
 
         if isinstance(relevant_args, str):
             relevant_args = {relevant_args: 0}
@@ -132,19 +142,21 @@ class Dispatchable:
         self._relevant_args = relevant_args
 
         new_doc = []
+        _implementations = []
         for backend in backend_system.backends.values():
-            info = backend.symbol_mapping.get(ident, None)
+            info = backend.functions.get(self._ident, None)
 
             if info is None:
                 continue  # not implemented by backend
 
-            self._implementations.append(
-                Implementation(backend, info["impl_symbol"], info.get("should_run", None))
+            _implementations.append(
+                Implementation(backend, info["function"], info.get("should_run", None))
             )
 
             new_blurb = info.get("additional_docs", "No backend documentation available.")
             new_doc.append(f"backend.name :\n" + textwrap.indent(new_blurb, "    "))
 
+        self._implementations = frozenset(_implementations)
         if not new_doc:
             new_doc = ["No backends found for this function."]
 
@@ -176,6 +188,8 @@ class Dispatchable:
         matching_backends = [
             impl for impl in self._implementations if impl.backend.matches(relevant_types)
         ]
+        print([impl.backend.matches(relevant_types) for impl in self._implementations])
+        print(matching_backends)
     
         if len(matching_backends) == 0:
             return self._default_func(*args, **kwargs)
