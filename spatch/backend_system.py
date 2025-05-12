@@ -22,9 +22,27 @@ class Backend:
     def from_info_dict(cls, info_dict):
         self = cls()
         self.name = info_dict["name"]
-        self.symbol_mapping = info_dict["symbol_mapping"]
+        self.symbol_mapping = info_dict["functions"]
 
-        return cls(info_dict["name"], info_dict["symbol_mapping"])
+        self.primary_types = frozenset(info_dict["primary_types"])
+        self.secondary_types = frozenset(info_dict["secondary_types"])
+        self.supported_types = self.primary_types | self.secondary_types
+        self.known_backends = frozenset(info_dict["known_backends"])
+
+    def matches(self, relevant_type):
+        # The default implementation (for now only one) uses exact checks on the
+        # type string.
+        type_strs = frozenset(get_identifier(t) for t in relevant_type)
+
+        if type_strs.is_disjoint(self.primary_types):
+            return False
+        elif type_strs.is_subset(self.supported_types):
+            return True
+        else:
+            return False
+
+    def knows_other(self, other_name):
+        return other_name in self.known_backends
 
 
 class BackendSystem:
@@ -184,7 +202,7 @@ class Dispatchable:
             impl.should_run = from_identifier(impl.should_run_symbol)
 
         if impl.should_run is None or impl.should_run(*args, **kwargs):
-            if impl.function is None:
+            if impl.function is NotFound:
                 impl.function = from_identifier(impl.function_symbol)
 
             return impl.function(*args, **kwargs)
