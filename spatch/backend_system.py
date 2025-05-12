@@ -1,4 +1,5 @@
 import functools
+from types import MethodType
 
 
 def get_identifier(obj):
@@ -135,9 +136,10 @@ class Dispatchable:
         # Just dedent, so it makes sense to append (should be fine):
         self.__doc__ = textwrap.dedent(self.__doc__) + new_doc
 
-    def __get__(self, ):
-        raise NotImplementedError(
-            "Need to implement this eventually to act like functions.")
+    def __get__(self, obj, objtype=None):
+        if obj is None:
+            return self
+        return MethodType(self, obj)
 
     @property
     def _backends(self):
