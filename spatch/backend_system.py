@@ -37,10 +37,10 @@ class Backend:
         )
         return self
 
-    def matches(self, relevant_type):
+    def matches(self, relevant_types):
         # The default implementation (for now only one) uses exact checks on the
         # type string.
-        type_strs = frozenset(get_identifier(t) for t in relevant_type)
+        type_strs = frozenset(get_identifier(t) for t in relevant_types)
 
         if type_strs.isdisjoint(self.primary_types):
             return False
@@ -92,7 +92,6 @@ class BackendSystem:
                 func.__module__ = module
 
             disp = Dispatchable(self, func, relevant_args)
-            functools.update_wrapper(disp, func)
 
             return disp
 
@@ -122,12 +121,13 @@ class Implementation:
 
 
 class Dispatchable:
-    """Dispatchable function object
-
-    TODO: We may want to return a function just to be nice (not having a func was
-    OK in NumPy for example, but has a few little stumbling blocks)
-    """
+    # Dispatchable function object
+    #
+    # TODO: We may want to return a function just to be nice (not having a func was
+    # OK in NumPy for example, but has a few little stumbling blocks)
     def __init__(self, backend_system, func, relevant_args, ident=None):
+        functools.update_wrapper(self, func)
+
         self._backend_system = backend_system
         self._default_func = func
         if ident is None:
@@ -154,7 +154,7 @@ class Dispatchable:
             )
 
             new_blurb = info.get("additional_docs", "No backend documentation available.")
-            new_doc.append(f"backend.name :\n" + textwrap.indent(new_blurb, "    "))
+            new_doc.append(f"{backend.name} :\n" + textwrap.indent(new_blurb, "    "))
 
         self._implementations = frozenset(_implementations)
         if not new_doc:
@@ -164,7 +164,10 @@ class Dispatchable:
         new_doc = "\n\nBackends\n--------\n" + new_doc
 
         # Just dedent, so it makes sense to append (should be fine):
-        self.__doc__ = textwrap.dedent(self.__doc__) + new_doc
+        if func.__doc__ is not None:
+            self.__doc__ = textwrap.dedent(func.__doc__) + new_doc
+        else:
+            self.__doc__ = None  # not our problem
 
     def __get__(self, obj, objtype=None):
         if obj is None:
