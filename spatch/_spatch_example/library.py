@@ -1,7 +1,10 @@
 
 from spatch.backend_system import BackendSystem
 
-backend_system = BackendSystem("_spatch_example_backends")
+backend_system = BackendSystem(
+    "_spatch_example_backends",
+    default_primary_types=["builtins:int"]
+)
 
 
 @backend_system.dispatchable(["x", "y"])

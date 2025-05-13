@@ -46,9 +46,7 @@ class Backend:
             return False
 
     def matches(self, relevant_types):
-        print(relevant_types)
         matches = frozenset(self.known_type(t) for t in relevant_types)
-        print(matches)
         if "primary" in matches and False not in matches:
             return True
         return False
@@ -58,19 +56,35 @@ class Backend:
 
 
 class BackendSystem:
-    def __init__(self, group):
+    def __init__(self, group, default_primary_types=()):
+        """Create a backend system that provides a @dispatchable decorator.
+
+        Parameters
+        ----------
+        group : str
+            The group of the backend entry points.  All backends are entry points
+            that are immediately loaded.
+        default_primary_types : frozenset
+            The set of types that are considered primary by default.  Types listed
+            here must be added as "secondary" types to backends if they wish
+            to support them.
+        """
         # TODO: Should we use group and name, or is group enough?
         # TODO: We could define types of the fallback here, or known "scalar"
         #       (i.e. unimportant types).
         #       In a sense, the fallback should maybe itself just be a normal
         #       backend, except we always try it if all else fails...
         self.backends = {}
+        self._default_primary_types = frozenset(default_primary_types)
 
         eps = importlib_metadata.entry_points(group=group)
         for ep in eps:
             self.backend_from_dict(ep.load())
 
     def known_type(self, relevant_type):
+        if get_identifier(relevant_type) in self._default_primary_types:
+            return True
+
         for backend in self.backends.values():
             if backend.known_type(relevant_type):
                 return True
