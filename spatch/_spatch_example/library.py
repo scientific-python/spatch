@@ -10,8 +10,3 @@ def divide(x, y):
     if not isinstance(x, int) or not isinstance(y, int):
         raise TypeError("x must be an integer")
     return x // y
-
-
-
-with backend_system.backends("numpy_gpu"):
-    divide(1, 2)

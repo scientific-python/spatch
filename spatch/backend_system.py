@@ -37,17 +37,21 @@ class Backend:
         )
         return self
 
-    def matches(self, relevant_types):
-        # The default implementation (for now only one) uses exact checks on the
-        # type string.
-        type_strs = frozenset(get_identifier(t) for t in relevant_types)
-
-        if type_strs.isdisjoint(self.primary_types):
-            return False
-        elif type_strs.issubset(self.supported_types):
-            return True
+    def known_type(self, relevant_type):
+        if get_identifier(relevant_type) in self.primary_types:
+            return "primary"  # TODO: maybe make it an enum?
+        elif get_identifier(relevant_type) in self.secondary_types:
+            return "secondary"
         else:
             return False
+
+    def matches(self, relevant_types):
+        print(relevant_types)
+        matches = frozenset(self.known_type(t) for t in relevant_types)
+        print(matches)
+        if "primary" in matches and False not in matches:
+            return True
+        return False
 
     def knows_other(self, other_name):
         return other_name in self.known_backends
@@ -66,7 +70,15 @@ class BackendSystem:
         for ep in eps:
             self.backend_from_dict(ep.load())
 
-        print(self.backends)
+    def known_type(self, relevant_type):
+        for backend in self.backends.values():
+            if backend.known_type(relevant_type):
+                return True
+        return False
+
+    def get_known_unique_types(self, relevant_types):
+        # From a list of args, return only the set of relevant types
+        return set(val for val in relevant_types if self.known_type(val))
 
     def backend_from_dict(self, info_namespace):
         new_backend = Backend.from_namespace(info_namespace)
@@ -180,10 +192,11 @@ class Dispatchable:
         return [impl.backend for impl in self._implementations]
 
     def _get_relevant_types(self, *args, **kwargs):
-        return frozenset(
+        relevant_types = [
             type(val) for name, pos in self._relevant_args.items()
             if (val := args[pos] if pos < len(args) else kwargs.get(name)) is not None
-        )
+        ]
+        return self._backend_system.get_known_unique_types(relevant_types)
 
     def __call__(self, *args, **kwargs):
         relevant_types = self._get_relevant_types(*args, **kwargs)
@@ -191,8 +204,6 @@ class Dispatchable:
         matching_backends = [
             impl for impl in self._implementations if impl.backend.matches(relevant_types)
         ]
-        print([impl.backend.matches(relevant_types) for impl in self._implementations])
-        print(matching_backends)
     
         if len(matching_backends) == 0:
             return self._default_func(*args, **kwargs)
