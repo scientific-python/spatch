@@ -12,8 +12,8 @@ def implements(ident, should_run=None):
 
 # for backend 1
 @implements("spatch._spatch_example.library:divide", should_run=lambda info, x, y: True)
-def divide(x, y):
-    print("hello from backend 1")
+def divide(info, x, y):
+    print("hello from backend 1", info)
     return x / y
 
 
