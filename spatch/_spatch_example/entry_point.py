@@ -1,6 +1,6 @@
 
 name = "backend1"    
-primary_types = ["builtins:float", "builtins:complex"]
+primary_types = ["builtins:float"]
 secondary_types = ["builtins:int"]
 
 
@@ -11,3 +11,7 @@ functions = {
         "additional_docs": "This is a test backend."
     }
 }
+
+# TODO: The documentation has to tell people not to create circles.
+# and that includes with the types?!
+# prioritize_over_backends = ["numpy"]

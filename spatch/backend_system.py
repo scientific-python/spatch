@@ -32,9 +32,8 @@ class Backend:
         self.primary_types = frozenset(info.primary_types)
         self.secondary_types = frozenset(info.secondary_types)
         self.supported_types = self.primary_types | self.secondary_types
-        self.known_backends = frozenset(
-            info.known_backends if hasattr(info, "known_backends") else []
-        )
+        self.known_backends = frozenset(getattr(info, "known_backends", []))
+        self.prioritize_over_backends = frozenset(getattr(info, "prioritize_over_backends", []))
         return self
 
     def known_type(self, relevant_type):
@@ -51,8 +50,33 @@ class Backend:
             return True
         return False
 
-    def knows_other(self, other_name):
-        return other_name in self.known_backends
+    def compare_with_other(self, other):
+        if other in self.prioritize_over_backends:
+            return 1
+
+        # If our primary types are a subset of the other, we match more
+        # precisely/specifically.
+        # TODO: Think briefly whether secondary types should be considered
+        if self.primary_types.issubset(other.primary_types):
+            return 1
+        elif other.primary_types.issubset(self.primary_types):
+            return -1
+
+        return NotImplemented  # unknown order (must check other)
+
+
+def compare_backends(impl1, impl2):
+    backend1 = impl1.backend
+    backend2 = impl2.backend
+
+    cmp = backend1.compare_with_other(backend2)
+    if cmp is not NotImplemented:
+        return cmp
+    cmp = backend2.compare_with_other(backend1)
+    if cmp is not NotImplemented:
+        return -cmp
+
+    return 0
 
 
 class BackendSystem:
@@ -214,7 +238,6 @@ class Dispatchable:
 
     def __call__(self, *args, **kwargs):
         relevant_types = self._get_relevant_types(*args, **kwargs)
-
         matching_backends = [
             impl for impl in self._implementations if impl.backend.matches(relevant_types)
         ]
@@ -224,21 +247,23 @@ class Dispatchable:
         elif len(matching_backends) == 1:
             impl = matching_backends[0]
         else:
+            # TODO: All of the following TODOs are related to sorting a graph and finding
+            # if it is a forest we need to find a single root node.
+            # @eriknw is smart enough to figure this out ;).
             # Try to figure out which backend "beats" the others
             # TODO: We can add a form of caching here, although user settings
             # can mean we have to invalidate the cache.
-            # (If we had a clear priority from the user, we can start with that!)
-            for backend in matching_backends:
-                for other in matching_backends:
-                    if backend == other:
-                        continue
+            # TODO: I think we can formulate rules that linearlization works
+            # (I.e I think we could cache the sorted list here.)
+            # TODO: We should maybe have a "debug" thing here to check if the
+            # backends are getting their priorities right.
+            # TODO: sorting with functools.cmp_to_key feels weird/slow (although we can cache).
+            matching_backends.sort(key=functools.cmp_to_key(compare_backends), reverse=True)
 
-                    if not backend.knows_other(backend.name):
-                        break
-                else:
-                    # This backend knew all others, so it wins
-                    impl = backend
-                    break
+            impl = matching_backends[0]
+            if compare_backends(impl, matching_backends[-1]) <= 0:
+                # If the above isn't certain, we could check all of them :).
+                raise RuntimeError("Multiple backends found but cannotprioritize them!")
 
         if impl.should_run is NotFound:
             impl.should_run = from_identifier(impl.should_run_symbol)
