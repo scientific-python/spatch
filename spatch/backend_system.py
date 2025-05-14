@@ -1,4 +1,6 @@
 
+import contextlib
+import contextvars
 import functools
 import importlib
 import importlib_metadata
@@ -65,9 +67,20 @@ class Backend:
         return NotImplemented  # unknown order (must check other)
 
 
-def compare_backends(impl1, impl2):
+def compare_backends(impl1, impl2, *, prioritized_backends):
     backend1 = impl1.backend
     backend2 = impl2.backend
+
+    indx1 = indx2 = len(prioritized_backends)
+    if backend1.name in prioritized_backends:
+        indx1 = prioritized_backends.index(backend1.name)
+    if backend2.name in prioritized_backends:
+        indx2 = prioritized_backends.index(backend2.name)
+
+    if indx1 < indx2:
+        return 1
+    elif indx1 > indx2:
+        return -1
 
     cmp = backend1.compare_with_other(backend2)
     if cmp is not NotImplemented:
@@ -100,6 +113,8 @@ class BackendSystem:
         #       backend, except we always try it if all else fails...
         self.backends = {}
         self._default_primary_types = frozenset(default_primary_types)
+
+        self._prioritized_backends = contextvars.ContextVar(f"{group}.prioritized_backends", default=())
 
         eps = importlib_metadata.entry_points(group=group)
         for ep in eps:
@@ -146,6 +161,37 @@ class BackendSystem:
             return disp
 
         return wrap_callable
+
+    @contextlib.contextmanager
+    def prioritize(self, backend):
+        """Helper to prioritize (or effectively activate) a specified backend.
+
+        This function can also be used to give a list of backends which is
+        equivalent to a nested (reverse) prioritization.
+
+        .. note::
+            We may want a way to have a "clean" dispatching state.  I.e. a
+            `backend_prioritizer(clean=True)` that disables any current
+            prioritization.
+        """
+        if isinstance(backend, str):
+            backends = (backend,)
+        else:
+            backends = tuple(backend)
+
+        for b in backends:
+            if b not in self.backends:
+                raise ValueError(f"Backend '{b}' not found.")
+
+        new = backends + self._prioritized_backends.get()
+        # TODO: We could/should have a faster deduplication here probably
+        #       (i.e. reduce the overhead of entering the context manager)
+        new = tuple({b: None for b in new})
+        token = self._prioritized_backends.set(new)
+        try:
+            yield
+        finally:
+            self._prioritized_backends.reset(token)
 
 
 # TODO: Make it a nicer singleton
@@ -238,6 +284,9 @@ class Dispatchable:
 
     def __call__(self, *args, **kwargs):
         relevant_types = self._get_relevant_types(*args, **kwargs)
+        # Prioritized backends is a tuple, so can be used as part of a cache key.
+        _prioritized_backends = self._backend_system._prioritized_backends.get()
+
         matching_backends = [
             impl for impl in self._implementations if impl.backend.matches(relevant_types)
         ]
@@ -258,10 +307,11 @@ class Dispatchable:
             # TODO: We should maybe have a "debug" thing here to check if the
             # backends are getting their priorities right.
             # TODO: sorting with functools.cmp_to_key feels weird/slow (although we can cache).
-            matching_backends.sort(key=functools.cmp_to_key(compare_backends), reverse=True)
+            cmp_func = functools.partial(compare_backends, prioritized_backends=_prioritized_backends)
+            matching_backends.sort(key=functools.cmp_to_key(cmp_func), reverse=True)
 
             impl = matching_backends[0]
-            if compare_backends(impl, matching_backends[-1]) <= 0:
+            if cmp_func(impl, matching_backends[-1]) <= 0:
                 # If the above isn't certain, we could check all of them :).
                 raise RuntimeError("Multiple backends found but cannotprioritize them!")
 
