@@ -142,14 +142,16 @@ class BackendSystem:
             return
         self.backends[new_backend.name] = new_backend
 
-    def dispatchable(self, relevant_args, module=None):
+    def dispatchable(self, relevant_args=None, module=None):
         """
         Decorate a Python function with information on how to extract
         the "relevant" arguments, i.e. arguments we wish to dispatch for.
         Parameters
         ----------
-        *relevant_args : The names of parameters to extract (we use inspect to
-                map these correctly).
+        relevant_args : str, list, tuple, or None
+            The names of parameters to extract (we use inspect to
+            map these correctly).
+            If ``None`` all parameters will be considered relevant.
         """
         def wrap_callable(func):
             # Overwrite original module (we use it later, could also pass it)
@@ -276,10 +278,13 @@ class Dispatchable:
         return [impl.backend for impl in self._implementations]
 
     def _get_relevant_types(self, *args, **kwargs):
-        relevant_types = [
-            type(val) for name, pos in self._relevant_args.items()
-            if (val := args[pos] if pos < len(args) else kwargs.get(name)) is not None
-        ]
+        if self._relevant_args is None:
+            relevant_type = list(args) + [k for k in kwargs]
+        else:
+            relevant_types = [
+                type(val) for name, pos in self._relevant_args.items()
+                if (val := args[pos] if pos < len(args) else kwargs.get(name)) is not None
+            ]
         return self._backend_system.get_known_unique_types(relevant_types)
 
     def __call__(self, *args, **kwargs):
