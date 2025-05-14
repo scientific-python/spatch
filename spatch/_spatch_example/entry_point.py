@@ -8,7 +8,8 @@ functions = {
     "spatch._spatch_example.library:divide": {
         "function": "spatch._spatch_example.backend:divide",
         "should_run": "spatch._spatch_example.backend:divide._should_run",
-        "additional_docs": "This is a test backend."
+        "additional_docs": "This is a test backend.",
+        "uses_info": True,
     }
 }
 

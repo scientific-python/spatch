@@ -1,6 +1,7 @@
 
 import contextlib
 import contextvars
+from dataclasses import dataclass
 import functools
 import importlib
 import importlib_metadata
@@ -71,6 +72,7 @@ def compare_backends(impl1, impl2, *, prioritized_backends):
     backend1 = impl1.backend
     backend2 = impl2.backend
 
+    # Sort by manual prioritization
     indx1 = indx2 = len(prioritized_backends)
     if backend1.name in prioritized_backends:
         indx1 = prioritized_backends.index(backend1.name)
@@ -82,6 +84,7 @@ def compare_backends(impl1, impl2, *, prioritized_backends):
     elif indx1 > indx2:
         return -1
 
+    # Sort by the backends compare function (i.e. type hierarchy and manual order)
     cmp = backend1.compare_with_other(backend2)
     if cmp is not NotImplemented:
         return cmp
@@ -89,7 +92,11 @@ def compare_backends(impl1, impl2, *, prioritized_backends):
     if cmp is not NotImplemented:
         return -cmp
 
-    return 0
+    # Fall back to name if all else fails
+    if backend1.name > backend2.name:
+        return 1
+    else:
+        return -1
 
 
 class BackendSystem:
@@ -201,12 +208,20 @@ NotFound = object()
 
 
 class Implementation:
-    __slots__ = ("backend", "should_run_symbol", "should_run", "function_symbol", "function")
+    __slots__ = (
+        "backend",
+        "should_run_symbol",
+        "should_run",
+        "function_symbol",
+        "function",
+        "uses_info",
+    )
 
-    def __init__(self, backend, function_symbol, should_run_symbol=None):
+    def __init__(self, backend, function_symbol, should_run_symbol=None, uses_info=False):
         """The implementation of a function, internal information?
         """
         self.backend = backend
+        self.uses_info = uses_info
 
         self.should_run_symbol = should_run_symbol
         if should_run_symbol is None:
@@ -216,6 +231,12 @@ class Implementation:
 
         self.function = NotFound
         self.function_symbol = function_symbol
+
+
+@dataclass
+class DispatchInfo:
+    relevant_types: list[type]
+    prioritized: bool
 
 
 class Dispatchable:
@@ -248,7 +269,8 @@ class Dispatchable:
                 continue  # not implemented by backend
 
             _implementations.append(
-                Implementation(backend, info["function"], info.get("should_run", None))
+                Implementation(backend, info["function"], info.get("should_run", None),
+                info.get("uses_info", False))
             )
 
             new_blurb = info.get("additional_docs", "No backend documentation available.")
@@ -292,15 +314,13 @@ class Dispatchable:
         # Prioritized backends is a tuple, so can be used as part of a cache key.
         _prioritized_backends = self._backend_system._prioritized_backends.get()
 
-        matching_backends = [
+        matching_impls = [
             impl for impl in self._implementations if impl.backend.matches(relevant_types)
         ]
     
-        if len(matching_backends) == 0:
+        if len(matching_impls) == 0:
             return self._default_func(*args, **kwargs)
-        elif len(matching_backends) == 1:
-            impl = matching_backends[0]
-        else:
+        elif len(matching_impls) > 1:
             # TODO: All of the following TODOs are related to sorting a graph and finding
             # if it is a forest we need to find a single root node.
             # @eriknw is smart enough to figure this out ;).
@@ -313,20 +333,22 @@ class Dispatchable:
             # backends are getting their priorities right.
             # TODO: sorting with functools.cmp_to_key feels weird/slow (although we can cache).
             cmp_func = functools.partial(compare_backends, prioritized_backends=_prioritized_backends)
-            matching_backends.sort(key=functools.cmp_to_key(cmp_func), reverse=True)
+            matching_impls.sort(key=functools.cmp_to_key(cmp_func), reverse=True)
 
-            impl = matching_backends[0]
-            if cmp_func(impl, matching_backends[-1]) <= 0:
-                # If the above isn't certain, we could check all of them :).
-                raise RuntimeError("Multiple backends found but cannotprioritize them!")
+        for impl in matching_impls:
+            prioritized = impl.backend.name in _prioritized_backends
+            info = DispatchInfo(relevant_types, prioritized)
 
-        if impl.should_run is NotFound:
-            impl.should_run = from_identifier(impl.should_run_symbol)
+            if impl.should_run is NotFound:
+                impl.should_run = from_identifier(impl.should_run_symbol)
 
-        if impl.should_run is None or impl.should_run(*args, **kwargs):
-            if impl.function is NotFound:
-                impl.function = from_identifier(impl.function_symbol)
+            if impl.should_run is None or impl.should_run(info, *args, **kwargs):
+                if impl.function is NotFound:
+                    impl.function = from_identifier(impl.function_symbol)
 
-            return impl.function(*args, **kwargs)
+                if impl.uses_info:
+                    return impl.function(info, *args, **kwargs)
+                else:
+                    return impl.function(*args, **kwargs)
 
         return self._default_func(*args, **kwargs)
