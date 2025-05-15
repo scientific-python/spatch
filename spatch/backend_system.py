@@ -3,6 +3,7 @@ import contextlib
 import contextvars
 from dataclasses import dataclass
 import functools
+import graphlib
 import importlib
 import importlib_metadata
 import warnings
@@ -68,22 +69,7 @@ class Backend:
         return NotImplemented  # unknown order (must check other)
 
 
-def compare_backends(impl1, impl2, *, prioritized_backends):
-    backend1 = impl1.backend
-    backend2 = impl2.backend
-
-    # Sort by manual prioritization
-    indx1 = indx2 = len(prioritized_backends)
-    if backend1.name in prioritized_backends:
-        indx1 = prioritized_backends.index(backend1.name)
-    if backend2.name in prioritized_backends:
-        indx2 = prioritized_backends.index(backend2.name)
-
-    if indx1 < indx2:
-        return 1
-    elif indx1 > indx2:
-        return -1
-
+def compare_backends(backend1, backend2):
     # Sort by the backends compare function (i.e. type hierarchy and manual order)
     cmp = backend1.compare_with_other(backend2)
     if cmp is not NotImplemented:
@@ -92,11 +78,7 @@ def compare_backends(impl1, impl2, *, prioritized_backends):
     if cmp is not NotImplemented:
         return -cmp
 
-    # Fall back to name if all else fails
-    if backend1.name > backend2.name:
-        return 1
-    else:
-        return -1
+    return 0
 
 
 class BackendSystem:
@@ -127,6 +109,29 @@ class BackendSystem:
         for ep in eps:
             self.backend_from_dict(ep.load())
 
+        # The topological sorter uses insertion sort, so sort backend names
+        # alphabetically first.
+        backends = sorted(b for b in self.backends)
+        graph = {b: set() for b in backends}
+        for i, n_b1 in enumerate(backends):
+            for n_b2 in backends[i+1:]:
+                cmp = compare_backends(self.backends[n_b1], self.backends[n_b2])
+                if cmp < 0:
+                    graph[n_b1].add(n_b2)
+                elif cmp > 0:
+                    graph[n_b2].add(n_b1)
+
+        ts = graphlib.TopologicalSorter(graph)
+        try:
+            order = ts.static_order()
+        except graphlib.CycleError:
+            raise RuntimeError(
+                "Backend dependencies form a cycle.  This is a bug in a backend, you can "
+                "fix this by doing <not yet implemented>.")
+
+        # Finalize backends to be a dict sorted by priority.
+        self.backends = {b: self.backends[b] for b in order}
+
     def known_type(self, relevant_type):
         if get_identifier(relevant_type) in self._default_primary_types:
             return True
@@ -138,7 +143,34 @@ class BackendSystem:
 
     def get_known_unique_types(self, relevant_types):
         # From a list of args, return only the set of relevant types
-        return set(val for val in relevant_types if self.known_type(val))
+        return frozenset(val for val in relevant_types if self.known_type(val))
+
+    @functools.lru_cache(maxsize=None)
+    def get_types_and_backends(self, relevant_types, prioritized_backends):
+        """Fetch relevant types and matching backends.
+
+        The main purpose of this function is to cache the results for a set
+        of unique input types to functions.
+        Since not all backends will support all functions, the implementation
+        still needs to filter for that.
+
+        Returns
+        -------
+        relevant_types : frozenset
+            The set of relevant types that are known to the backend system.
+        matching_backends : tuple
+            A tuple of backend names sorted by priority.
+        """
+        # Filter out unknown types:
+        relevant_types = self.get_known_unique_types(relevant_types)
+
+        prioritized_ordered = {n: self.backends[n] for n in prioritized_backends}
+        prioritized_ordered.update(self.backends)
+
+        matching_backends = tuple(
+            n for n in prioritized_ordered if self.backends[n].matches(relevant_types)
+        )
+        return relevant_types, matching_backends
 
     def backend_from_dict(self, info_namespace):
         new_backend = Backend.from_namespace(info_namespace)
@@ -261,22 +293,22 @@ class Dispatchable:
         self._relevant_args = relevant_args
 
         new_doc = []
-        _implementations = []
+        self._implementations = {}
         for backend in backend_system.backends.values():
             info = backend.functions.get(self._ident, None)
 
             if info is None:
-                continue  # not implemented by backend
+                continue
 
-            _implementations.append(
-                Implementation(backend, info["function"], info.get("should_run", None),
-                info.get("uses_info", False))
+            self._implementations[backend.name] = Implementation(
+                backend, info["function"],
+                info.get("should_run", None),
+                info.get("uses_info", False),
             )
 
             new_blurb = info.get("additional_docs", "No backend documentation available.")
             new_doc.append(f"{backend.name} :\n" + textwrap.indent(new_blurb, "    "))
 
-        self._implementations = frozenset(_implementations)
         if not new_doc:
             new_doc = ["No backends found for this function."]
 
@@ -294,47 +326,31 @@ class Dispatchable:
             return self
         return MethodType(self, obj)
 
-    @property
-    def _backends(self):
-        # Extract the backends:
-        return [impl.backend for impl in self._implementations]
-
     def _get_relevant_types(self, *args, **kwargs):
+        # Return all relevant types, these are not filtered by the known_types
         if self._relevant_args is None:
-            relevant_type = list(args) + [k for k in kwargs]
+            return frozenset(list(args) + [k for k in kwargs])
         else:
-            relevant_types = [
+            return frozenset(
                 type(val) for name, pos in self._relevant_args.items()
                 if (val := args[pos] if pos < len(args) else kwargs.get(name)) is not None
-            ]
-        return self._backend_system.get_known_unique_types(relevant_types)
+            ) 
 
     def __call__(self, *args, **kwargs):
         relevant_types = self._get_relevant_types(*args, **kwargs)
         # Prioritized backends is a tuple, so can be used as part of a cache key.
         _prioritized_backends = self._backend_system._prioritized_backends.get()
 
+        relevant_types, matching_backends = self._backend_system.get_types_and_backends(
+            relevant_types, _prioritized_backends)
+
+        # TODO: If we ever anticipate a large number of backends that each only
+        #       support a small number of functions this is not ideal.
         matching_impls = [
-            impl for impl in self._implementations if impl.backend.matches(relevant_types)
+            impl for name in matching_backends
+            if (impl := self._implementations.get(name)) is not None
         ]
     
-        if len(matching_impls) == 0:
-            return self._default_func(*args, **kwargs)
-        elif len(matching_impls) > 1:
-            # TODO: All of the following TODOs are related to sorting a graph and finding
-            # if it is a forest we need to find a single root node.
-            # @eriknw is smart enough to figure this out ;).
-            # Try to figure out which backend "beats" the others
-            # TODO: We can add a form of caching here, although user settings
-            # can mean we have to invalidate the cache.
-            # TODO: I think we can formulate rules that linearlization works
-            # (I.e I think we could cache the sorted list here.)
-            # TODO: We should maybe have a "debug" thing here to check if the
-            # backends are getting their priorities right.
-            # TODO: sorting with functools.cmp_to_key feels weird/slow (although we can cache).
-            cmp_func = functools.partial(compare_backends, prioritized_backends=_prioritized_backends)
-            matching_impls.sort(key=functools.cmp_to_key(cmp_func), reverse=True)
-
         for impl in matching_impls:
             prioritized = impl.backend.name in _prioritized_backends
             info = DispatchInfo(relevant_types, prioritized)
