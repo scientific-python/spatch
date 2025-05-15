@@ -107,7 +107,7 @@ class BackendSystem:
 
         eps = importlib_metadata.entry_points(group=group)
         for ep in eps:
-            self.backend_from_dict(ep.load())
+            self.backend_from_namespace(ep.load())
 
         # The topological sorter uses insertion sort, so sort backend names
         # alphabetically first.
@@ -153,6 +153,8 @@ class BackendSystem:
         of unique input types to functions.
         Since not all backends will support all functions, the implementation
         still needs to filter for that.
+        (For now, we assume that this is OK, it shouldl be but we could optimize
+        it by not using dicts/in C or move/add caching to the function level.)
 
         Returns
         -------
@@ -164,6 +166,7 @@ class BackendSystem:
         # Filter out unknown types:
         relevant_types = self.get_known_unique_types(relevant_types)
 
+        # Reorder the self.backends dict to take into account the prioritized backends.
         prioritized_ordered = {n: self.backends[n] for n in prioritized_backends}
         prioritized_ordered.update(self.backends)
 
@@ -172,7 +175,7 @@ class BackendSystem:
         )
         return relevant_types, matching_backends
 
-    def backend_from_dict(self, info_namespace):
+    def backend_from_namespace(self, info_namespace):
         new_backend = Backend.from_namespace(info_namespace)
         if new_backend.name in self.backends:
             warnings.warn(
@@ -267,8 +270,13 @@ class Implementation:
 
 @dataclass
 class DispatchInfo:
+    """Additional information for the backends.
+    """
+    # This must be a very light-weight object, since unless we cache it somehow
+    # we have to create it on most calls (although only if we use backends).
     relevant_types: list[type]
     prioritized: bool
+    # Should we pass the original implementation here?
 
 
 class Dispatchable:
@@ -334,7 +342,7 @@ class Dispatchable:
             return frozenset(
                 type(val) for name, pos in self._relevant_args.items()
                 if (val := args[pos] if pos < len(args) else kwargs.get(name)) is not None
-            ) 
+            )
 
     def __call__(self, *args, **kwargs):
         relevant_types = self._get_relevant_types(*args, **kwargs)
