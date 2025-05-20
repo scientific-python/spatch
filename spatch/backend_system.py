@@ -4,26 +4,12 @@ import contextvars
 from dataclasses import dataclass
 import functools
 import graphlib
-import importlib
 import importlib_metadata
 import warnings
 import textwrap
 from types import MethodType
 
-
-def get_identifier(obj):
-    """Helper to get any objects identifier.  Is there an exiting short-hand?
-    """
-    return f"{obj.__module__}:{obj.__qualname__}"
-
-
-def from_identifier(ident):
-    module, qualname = ident.split(":")
-    obj = importlib.import_module(module)
-    for name in qualname.split("."):
-        obj = getattr(obj, name)
-
-    return obj
+from spatch import from_identifier, get_identifier
 
 
 class Backend:
@@ -184,7 +170,7 @@ class BackendSystem:
             return
         self.backends[new_backend.name] = new_backend
 
-    def dispatchable(self, relevant_args=None, module=None):
+    def dispatchable(self, relevant_args=None, *, module=None, qualname=None):
         """
         Decorate a Python function with information on how to extract
         the "relevant" arguments, i.e. arguments we wish to dispatch for.
@@ -199,6 +185,8 @@ class BackendSystem:
             # Overwrite original module (we use it later, could also pass it)
             if module is not None:
                 func.__module__ = module
+            if qualname is not None:
+                func.__qualname__ = qualname
 
             disp = Dispatchable(self, func, relevant_args)
 

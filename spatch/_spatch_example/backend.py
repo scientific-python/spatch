@@ -1,25 +1,37 @@
+try:
+    from spatch.backend_utils import BackendImplementation
+except ModuleNotFoundError:
+    class Noop:
+        def __call__(self, *args, **kwargs):
+            return Noop()
 
+        __init__ = __getattr__ = __getitem__ = __call__
 
-def implements(ident, should_run=None):
-    """Attach should_run to the function.  In the future this would
-    also be used to generate the function dict for the entry point.
-    """
-    def decorator(func):
-        func._should_run = should_run
-        return func
-    return decorator
+    BackendImplementation = Noop
 
+from . import library
 
-# for backend 1
-@implements("spatch._spatch_example.library:divide", should_run=lambda info, x, y: True)
+backend1 = BackendImplementation("backend1")
+backend2 = BackendImplementation("backend2")
+
+# For backend 1
+@backend1.implements(library.divide, uses_info=True, should_run=lambda info, x, y: True)
 def divide(info, x, y):
+    """This implementation works well on floats."""
     print("hello from backend 1", info)
     return x / y
 
 
 # For backend 2
-@implements("spatch._spatch_example.library:divide", should_run=lambda info, x, y: True)
+@backend2.implements("spatch._spatch_example.library:divide")
 def divide2(x, y):
+    """This is a test backend!
+    and it has a multi-line docstring which makes this longer than normal.
+    """
     print("hello from backend 2")
     return x / y
 
+
+@backend2.set_should_run(divide2)
+def _(info, x, y):
+    return True
