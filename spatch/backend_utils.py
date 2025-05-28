@@ -83,7 +83,7 @@ class BackendImplementation:
         def inner(func: Callable):
             identity = get_identifier(func)
             if identity.endswith(":<lambda>") or identity.endswith(":_"):
-                func._should_run = func
+                backend_func._should_run = func
                 identity = f"{impl_identity}._should_run"
             info = self.impl_to_info[impl_identity]
             info.should_run = func
@@ -125,8 +125,8 @@ class MultiLineString:
         return "\n".join(
             [
                 "(",
-                *(f"{repr(line + '\n')}" for line in self.lines[:-1]),
-                f"{repr(self.lines[-1])}",
+                *(repr(line + '\n') for line in self.lines[:-1]),
+                repr(self.lines[-1]),
                 ")",
             ]
         )

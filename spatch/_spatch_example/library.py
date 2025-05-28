@@ -7,7 +7,7 @@ _backend_system = BackendSystem(
 )
 
 
-backend = _backend_system.prioritize
+backend_opts = _backend_system.backend_opts
 
 @_backend_system.dispatchable(["x", "y"])
 def divide(x, y):

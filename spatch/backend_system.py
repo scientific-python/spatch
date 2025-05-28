@@ -14,6 +14,18 @@ from spatch import from_identifier, get_identifier
 
 class Backend:
     @classmethod
+    def default_backend(cls, primary_types):
+        self = cls()
+        self.name = "default"
+        self.functions = None
+        self.primary_types = frozenset(primary_types)
+        self.secondary_types = frozenset()
+        self.supported_types = self.primary_types
+        self.known_backends = frozenset()
+        self.prioritize_over_backends = frozenset()
+        return self
+
+    @classmethod
     def from_namespace(cls, info):
         self = cls()
         self.name = info.name
@@ -47,9 +59,9 @@ class Backend:
         # If our primary types are a subset of the other, we match more
         # precisely/specifically.
         # TODO: Think briefly whether secondary types should be considered
-        if self.primary_types.issubset(other.primary_types):
+        if self.primary_types.issubset(other.primary_types | other.secondary_types):
             return 1
-        elif other.primary_types.issubset(self.primary_types):
+        elif other.primary_types.issubset(self.primary_types | self.secondary_types):
             return -1
 
         return NotImplemented  # unknown order (must check other)
@@ -86,19 +98,18 @@ class BackendSystem:
         #       (i.e. unimportant types).
         #       In a sense, the fallback should maybe itself just be a normal
         #       backend, except we always try it if all else fails...
-        self.backends = {}
+        self.backends = {"default": Backend.default_backend(default_primary_types)}
         self._default_primary_types = frozenset(default_primary_types)
-
-        self._prioritized_backends = contextvars.ContextVar(f"{group}.prioritized_backends", default=())
 
         eps = importlib_metadata.entry_points(group=group)
         for ep in eps:
             self.backend_from_namespace(ep.load())
 
         # The topological sorter uses insertion sort, so sort backend names
-        # alphabetically first.
+        # alphabetically first.  But ensure that we put default first.
         backends = sorted(b for b in self.backends)
-        graph = {b: set() for b in backends}
+        graph = {"default": set()}
+        graph.update({b: set() for b in backends})
         for i, n_b1 in enumerate(backends):
             for n_b2 in backends[i+1:]:
                 cmp = compare_backends(self.backends[n_b1], self.backends[n_b2])
@@ -109,7 +120,7 @@ class BackendSystem:
 
         ts = graphlib.TopologicalSorter(graph)
         try:
-            order = ts.static_order()
+            order = tuple(ts.static_order())
         except graphlib.CycleError:
             raise RuntimeError(
                 "Backend dependencies form a cycle.  This is a bug in a backend, you can "
@@ -117,8 +128,12 @@ class BackendSystem:
 
         # Finalize backends to be a dict sorted by priority.
         self.backends = {b: self.backends[b] for b in order}
+        # The state is the ordered (active) backends and the prefered type (None).
+        self._dispatch_state = contextvars.ContextVar(
+            f"{group}.dispatch_state", default=(order, None))
 
-    def known_type(self, relevant_type):
+    @functools.lru_cache(maxsize=128)
+    def known_type(self, relevant_type, primary=False):
         if get_identifier(relevant_type) in self._default_primary_types:
             return True
 
@@ -131,8 +146,8 @@ class BackendSystem:
         # From a list of args, return only the set of relevant types
         return frozenset(val for val in relevant_types if self.known_type(val))
 
-    @functools.lru_cache(maxsize=None)
-    def get_types_and_backends(self, relevant_types, prioritized_backends):
+    @functools.lru_cache(maxsize=128)
+    def get_types_and_backends(self, relevant_types, ordered_backends):
         """Fetch relevant types and matching backends.
 
         The main purpose of this function is to cache the results for a set
@@ -152,12 +167,8 @@ class BackendSystem:
         # Filter out unknown types:
         relevant_types = self.get_known_unique_types(relevant_types)
 
-        # Reorder the self.backends dict to take into account the prioritized backends.
-        prioritized_ordered = {n: self.backends[n] for n in prioritized_backends}
-        prioritized_ordered.update(self.backends)
-
         matching_backends = tuple(
-            n for n in prioritized_ordered if self.backends[n].matches(relevant_types)
+            n for n in ordered_backends if self.backends[n].matches(relevant_types)
         )
         return relevant_types, matching_backends
 
@@ -195,35 +206,112 @@ class BackendSystem:
         return wrap_callable
 
     @contextlib.contextmanager
-    def prioritize(self, backend):
-        """Helper to prioritize (or effectively activate) a specified backend.
+    def backend_opts(self, *, prioritize=(), disable=(), type=None):
+        """Customize the backend dispatching behavior.
 
-        This function can also be used to give a list of backends which is
-        equivalent to a nested (reverse) prioritization.
+        Context manager to allow customizing the dispatching behavior.
 
         .. note::
-            We may want a way to have a "clean" dispatching state.  I.e. a
-            `backend_prioritizer(clean=True)` that disables any current
-            prioritization.
-        """
-        if isinstance(backend, str):
-            backends = (backend,)
-        else:
-            backends = tuple(backend)
+            For the moment use `backend_opts().__enter__()` for global
+            configuration.
 
-        for b in backends:
+        .. warning::
+            When modifying dispatching behavior you must be aware that this
+            may have side effects on your program.  See details in notes.
+
+        Parameters
+        ----------
+        prioritize : str or list of str
+            The backends to prioritize, this may also enable a backend that
+            would otherwise never be chosen.
+        disable : str or list of str
+            Specific backends to disable.
+        type : type
+            A type to dispatch for. Functions will behave as if this type was
+            used when calling (additionally to types passed).
+            This is a way to enforce use of this type (and thus backends using
+            it). But if used for a larger chunk of code it can clearly break
+            type assumptions easily.
+
+            .. note::
+                If no version of a function exists that supports this type,
+                then dispatching will currently fail.  It may try without the
+                type in the future to allow a graceful fallback.
+
+        Notes
+        -----
+        Both ``prioritize`` and ``type`` can modify behavior of the contained
+        block in significant ways.
+
+        For ``prioritize=`` this depends on the backend.  A backend may for
+        example result in lower precision results.  Assuming no bugs, a backend
+        should return roughly equivalent results.
+
+        For ``type=`` code behavior will change to work as if you were using this
+        type.  This will definitely change behavior.
+        I.e. many functions may return the given type. Sometimes this may be useful
+        to modify behavior of code wholesale.
+
+        Especially if you call a third party library, either of these changes may
+        break assumptions in their code and it while a third party may ensure the
+        correct type for them locally it is not a bug to not do so.
+
+        Examples
+        --------
+        This example is based on a hypothetical ``cucim`` backend for ``skimage``:
+
+        >>> with skimage.backend_opts(prioritize="cucim"):
+        ...     ...
+
+        Which might use cucim also for NumPy inputs (but return NumPy arrays then).
+        (I.e. ``cucim`` would use the fact that it is prioritized here to decide
+        it is OK to convert NumPy arrays -- it could still defer for speed reasons.)
+
+        On the other hand:
+
+        >>> with skimage.backend_opts(type=cupy.ndarray):
+        ...     ...
+
+        Would guarantee that we work with CuPy arrays that the a returned array
+        is a CuPy array.  Together with ``prioritize="cucim"`` it ensure the
+        cucim version is used (otherwise another backend may be preferred if it
+        also supports CuPy arrays) or cucim may choose to require prioritization
+        to accept NumPy arrays.
+
+        Backends should simply document their behavior with ``backend_opts`` and
+        which usage pattern they see for their users.
+
+        """
+        if isinstance(prioritize, str):
+            prioritize = (prioritize,)
+        else:
+            prioritize = tuple(prioritize)
+
+        if isinstance(disable, str):
+            disable = (disable,)
+        else:
+            disable = tuple(disable)
+
+        for b in prioritize + disable:
             if b not in self.backends:
                 raise ValueError(f"Backend '{b}' not found.")
 
-        new = backends + self._prioritized_backends.get()
+        if type is not None:
+            if not self.known_type(type, primary=True):
+                raise ValueError(
+                    f"Type '{type}' not a valid primary type of any backend. "
+                    "It is impossible to enforce use of this type for any function.")
+
+        new = prioritize + self._dispatch_state.get()[0]
         # TODO: We could/should have a faster deduplication here probably
         #       (i.e. reduce the overhead of entering the context manager)
-        new = tuple({b: None for b in new})
-        token = self._prioritized_backends.set(new)
+        new = tuple({b: None for b in new if b not in disable})
+
+        token = self._dispatch_state.set((new, type))
         try:
             yield
         finally:
-            self._prioritized_backends.reset(token)
+            self._dispatch_state.reset(token)
 
 
 # TODO: Make it a nicer singleton
@@ -291,9 +379,20 @@ class Dispatchable:
         new_doc = []
         self._implementations = {}
         for backend in backend_system.backends.values():
+            if backend.name == "default":
+                # The default is not stored on the backend, so explicitly
+                # create an Implementation for it.
+                impl = Implementation(
+                    backend, self._ident, None, False,
+                )
+                impl.function = self._default_func
+                self._implementations["default"] = impl
+                continue
+
             info = backend.functions.get(self._ident, None)
 
             if info is None:
+                # Backend does not implement this function.
                 continue
 
             self._implementations[backend.name] = Implementation(
@@ -325,9 +424,9 @@ class Dispatchable:
     def _get_relevant_types(self, *args, **kwargs):
         # Return all relevant types, these are not filtered by the known_types
         if self._relevant_args is None:
-            return frozenset(list(args) + [k for k in kwargs])
+            return set(list(args) + [k for k in kwargs])
         else:
-            return frozenset(
+            return set(
                 type(val) for name, pos in self._relevant_args.items()
                 if (val := args[pos] if pos < len(args) else kwargs.get(name)) is not None
             )
@@ -335,10 +434,13 @@ class Dispatchable:
     def __call__(self, *args, **kwargs):
         relevant_types = self._get_relevant_types(*args, **kwargs)
         # Prioritized backends is a tuple, so can be used as part of a cache key.
-        _prioritized_backends = self._backend_system._prioritized_backends.get()
+        ordered_backends, type_ = self._backend_system._dispatch_state.get()
+        if type_ is not None:
+            relevant_types.add(type_)
+        relevant_types = frozenset(relevant_types)
 
         relevant_types, matching_backends = self._backend_system.get_types_and_backends(
-            relevant_types, _prioritized_backends)
+            relevant_types, ordered_backends)
 
         # TODO: If we ever anticipate a large number of backends that each only
         #       support a small number of functions this is not ideal.
@@ -348,7 +450,7 @@ class Dispatchable:
         ]
     
         for impl in matching_impls:
-            prioritized = impl.backend.name in _prioritized_backends
+            prioritized = impl.backend.name in ordered_backends
             info = DispatchInfo(relevant_types, prioritized)
 
             if impl.should_run is NotFound:

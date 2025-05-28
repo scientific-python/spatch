@@ -18,7 +18,12 @@ backend2 = BackendImplementation("backend2")
 @backend1.implements(library.divide, uses_info=True, should_run=lambda info, x, y: True)
 def divide(info, x, y):
     """This implementation works well on floats."""
-    print("hello from backend 1", info)
+    print("hello from backend 1")
+    # Because the default implementation returns ints for int inputs
+    # we do this as well here.  We _must_ use `info.relevant_types`
+    # to make this decision (to honor the `backend_opts` state)
+    if float not in info.relevant_types:
+        return x // y  # mirror library implementation for ints
     return x / y
 
 
