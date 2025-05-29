@@ -83,6 +83,13 @@ class BackendSystem:
     def __init__(self, group, default_primary_types=()):
         """Create a backend system that provides a @dispatchable decorator.
 
+        The backend system also has provides the ``backend_opts`` context manager
+        which can be re-exposed by the library.
+
+        .. note::
+            Currently, there is a lot of public methods here, these should be hidden
+            away.
+
         Parameters
         ----------
         group : str
@@ -184,14 +191,31 @@ class BackendSystem:
 
     def dispatchable(self, relevant_args=None, *, module=None, qualname=None):
         """
+        Decorator to mark functions as dispatchable.
+
         Decorate a Python function with information on how to extract
         the "relevant" arguments, i.e. arguments we wish to dispatch for.
+
         Parameters
         ----------
         relevant_args : str, list, tuple, or None
             The names of parameters to extract (we use inspect to
             map these correctly).
             If ``None`` all parameters will be considered relevant.
+        module : str
+            Override the module of the function (actually modifies it)
+            to ensure a well defined and stable public API.
+        qualname : str
+            Override the qualname of the function (actually modifies it)
+            to ensure a well defined and stable public API.
+
+        Note
+        ----
+        The module/qualname overrides are useful because you may not want to
+        advertise that a function is e.g. defined in the module
+        ``library._private`` when it is exposed at ``library`` directly.
+        Unfortunately, changing the module can confuse some tools, so we may
+        wish to change the behavior of actually overriding it.
         """
         def wrap_callable(func):
             # Overwrite original module (we use it later, could also pass it)
@@ -374,11 +398,41 @@ class Implementation:
 
 @dataclass
 class DispatchInfo:
-    """Additional information for the backends.
+    """Additional information passed to backends.
+
+    ``DispatchInfo`` is passed as first (additional) argument to ``should_run``
+    and to a backend implementation (if desired).
+    Some backends will require the ``types`` attribute.
+
+    Attributes
+    ----------
+    types : Sequence[type]
+        The (unique) types we are dispatching for.  It is possible that
+        not all types are passed as arguments if the user is requesting
+        a specific type.
+
+        Backends that have more than one primary types *must* use this
+        information to decide which type to return.
+        I.e. if you allow mixing of types and there is more than one type
+        here, then you have to decide which one to return (promotion of types).
+        E.g. a ``cupy.ndarray`` and ``numpy.ndarray`` together should return a
+        ``cupy.ndarray``.
+
+        Backends that strictly match a single primary type can safely ignore this
+        (they always return the same type).
+
+        .. note::
+            This is a frozenset currently, but please consider it a sequence.
+
+    prioritized : bool
+        Whether the backend is prioritized. You may use this for example when
+        deciding if you want to defer with ``should_run``.  Or it may be fine
+        to use this to decide that e.g. a NumPy array will be converted to a
+        cupy array, but only if prioritized.
     """
     # This must be a very light-weight object, since unless we cache it somehow
     # we have to create it on most calls (although only if we use backends).
-    relevant_types: list[type]
+    types: tuple[type]
     prioritized: bool
     # Should we pass the original implementation here?
 
@@ -490,7 +544,8 @@ class Dispatchable:
             if impl.should_run is NotFound:
                 impl.should_run = from_identifier(impl.should_run_symbol)
 
-            if impl.should_run is None or impl.should_run(info, *args, **kwargs):
+            # We use `is True` to possibly add information to the trace/log in the future.
+            if impl.should_run is None or impl.should_run(info, *args, **kwargs) is True:
                 if impl.function is NotFound:
                     impl.function = from_identifier(impl.function_symbol)
 

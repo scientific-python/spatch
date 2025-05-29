@@ -1,3 +1,9 @@
+# Minimal usage example
+
+A minimal example can be found below.  If you are interested in the
+implementation side of this, please check
+[the source](https://github.com/scientific-python/spatch/spatch/_spatch_example).
+
 This is a very minimalistic example to show some of the concepts of
 creating a library and backends and how a user might work with them.
 
@@ -91,7 +97,5 @@ pprint.pprint(trace[-3:])
 ```
 How types work precisely should be decided by the backend, but care should be taken.
 E.g. it is not clear if returning a float is OK when the user said `type=complex`.
-
-TODO: I (seberg) like using the `type=` and I suspect it's the right path.  But it
-isn't clear that returning a float above is OK?  It also makes you wonder if
-`type=complex|float` would make more sense, but it would be the same as `type=float`.
+(In the future, we may want to think more about this, especially if `type=complex|real`
+may make sense, or if we should fall back if no implementation can be found.)

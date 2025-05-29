@@ -20,6 +20,8 @@ class BackendImplementation:
     impl_to_info: dict[str, BackendFunctionInfo]
 
     def __init__(self, backend_name: str):
+        """Helper class to create backends.
+        """
         self.name = backend_name
         self.api_to_info = {}  # {api_identity_string: backend_function_info}
         self.impl_to_info = {}  # {impl_identity_string: backend_function_info}
@@ -31,8 +33,32 @@ class BackendImplementation:
         should_run: str | Callable | None = None,
         uses_info: bool = False,
     ):
-        """Attach should_run to the function.  In the future this would
-        also be used to generate the function dict for the entry point.
+        """Mark function as an implementation of a dispatchable library function.
+
+        This is a decorator to facilitate writing an entry-point and potentially
+        attaching ``should_run``. It is not necessary to use this decorator
+        and you may want to wrap it into a convenience helper for your purposes.
+
+        Parameters
+        ----------
+        api_identity
+            The original function to be wrapped. Either as a string identity
+            or the callable (from which the identifier is extracted).
+        should_run
+            Callable or a string with the module and name for a ``should_run``
+            function.  A ``should_run`` function takes a ``DispatchInfo``
+            object as first argument and otherwise all arguments of the wrapped
+            function.
+            It must return ``True`` if the backend should be used.
+
+            It is the backend author's responsibility to ensure that ``should_run``
+            is not called unnecessarily and is ideally very light-weight (if it
+            doesn't return ``True``).
+            (Any return value except ``True`` is considered falsy to allow the return
+            to be used for diagnostics in the future.)
+        uses_info
+            Whether the function should be passed a ``DispatchInfo`` object
+            as first argument.
         """
         if callable(api_identity):
             api_identity = get_identifier(api_identity)
@@ -75,6 +101,18 @@ class BackendImplementation:
         return inner
 
     def set_should_run(self, backend_func: str | Callable):
+        """Alternative decorator to set the ``should_run`` function.
+
+        This is a decorator to decorate a function as ``should_run``.  If
+        the function is a lambda or called ``_`` it is attached to the
+        wrapped backend function (cannot be a string).
+        Otherwise, it is assumed that the callable can be found at runtime.
+
+        Parameters
+        ----------
+        backend_func
+            The backend function for which we want to set ``should_run``.
+        """
         if isinstance(backend_func, str):
             impl_identity = backend_func
         else:
