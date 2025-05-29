@@ -128,9 +128,10 @@ class BackendSystem:
 
         # Finalize backends to be a dict sorted by priority.
         self.backends = {b: self.backends[b] for b in order}
-        # The state is the ordered (active) backends and the prefered type (None).
+        # The state is the ordered (active) backends and the prefered type (None)
+        # and the trace (None as not tracing).
         self._dispatch_state = contextvars.ContextVar(
-            f"{group}.dispatch_state", default=(order, None))
+            f"{group}.dispatch_state", default=(order, None, None))
 
     @functools.lru_cache(maxsize=128)
     def known_type(self, relevant_type, primary=False):
@@ -206,7 +207,7 @@ class BackendSystem:
         return wrap_callable
 
     @contextlib.contextmanager
-    def backend_opts(self, *, prioritize=(), disable=(), type=None):
+    def backend_opts(self, *, prioritize=(), disable=(), type=None, trace=False):
         """Customize the backend dispatching behavior.
 
         Context manager to allow customizing the dispatching behavior.
@@ -224,19 +225,31 @@ class BackendSystem:
         prioritize : str or list of str
             The backends to prioritize, this may also enable a backend that
             would otherwise never be chosen.
+            Prioritization nests, outer prioritization remain active.
         disable : str or list of str
-            Specific backends to disable.
+            Specific backends to disable.  This nests, outer disabled are
+            still disabled (unless prioritized).
         type : type
             A type to dispatch for. Functions will behave as if this type was
             used when calling (additionally to types passed).
             This is a way to enforce use of this type (and thus backends using
             it). But if used for a larger chunk of code it can clearly break
             type assumptions easily.
+            (The type argument of a previous call is replaced.)
 
             .. note::
                 If no version of a function exists that supports this type,
                 then dispatching will currently fail.  It may try without the
                 type in the future to allow a graceful fallback.
+
+        trace : bool
+            If ``True`` entering returns a list and this list will contain
+            information for each call to a dispatchable function.
+            (When nesting, an outer existing tracing is currently paused.)
+
+            .. note::
+                Tracing is considered for debugging/human readers and does not
+                guarantee a stable API for the ``trace`` result.
 
         Notes
         -----
@@ -281,6 +294,14 @@ class BackendSystem:
         Backends should simply document their behavior with ``backend_opts`` and
         which usage pattern they see for their users.
 
+        Tracing calls can be done using, where ``trace`` is a list of informations for
+        each call.  This contains a tuple of the function identifier and a list of
+        backends called (typically exactly one, but it will also note if a backend deferred
+        via ``should_run``).
+
+        >>> with skimage.backend_opts(trace=True) as trace:
+        ...     ...
+
         """
         if isinstance(prioritize, str):
             prioritize = (prioritize,)
@@ -292,6 +313,7 @@ class BackendSystem:
         else:
             disable = tuple(disable)
 
+        # TODO: I think these should be warnings maybe.
         for b in prioritize + disable:
             if b not in self.backends:
                 raise ValueError(f"Backend '{b}' not found.")
@@ -302,14 +324,20 @@ class BackendSystem:
                     f"Type '{type}' not a valid primary type of any backend. "
                     "It is impossible to enforce use of this type for any function.")
 
-        new = prioritize + self._dispatch_state.get()[0]
+        ordered_backends, _, curr_trace = self._dispatch_state.get()
+        ordered_backends = prioritize + ordered_backends
+
         # TODO: We could/should have a faster deduplication here probably
         #       (i.e. reduce the overhead of entering the context manager)
-        new = tuple({b: None for b in new if b not in disable})
+        ordered_backends = tuple({b: None for b in ordered_backends if b not in disable})
 
-        token = self._dispatch_state.set((new, type))
+        if trace:
+            # replace the current trace state.
+            curr_trace = []
+
+        token = self._dispatch_state.set((ordered_backends, type, curr_trace))
         try:
-            yield
+            yield curr_trace
         finally:
             self._dispatch_state.reset(token)
 
@@ -434,7 +462,7 @@ class Dispatchable:
     def __call__(self, *args, **kwargs):
         relevant_types = self._get_relevant_types(*args, **kwargs)
         # Prioritized backends is a tuple, so can be used as part of a cache key.
-        ordered_backends, type_ = self._backend_system._dispatch_state.get()
+        ordered_backends, type_, trace = self._backend_system._dispatch_state.get()
         if type_ is not None:
             relevant_types.add(type_)
         relevant_types = frozenset(relevant_types)
@@ -449,6 +477,12 @@ class Dispatchable:
             if (impl := self._implementations.get(name)) is not None
         ]
     
+        if trace is not None:
+            call_trace = []
+            trace.append((self._ident, call_trace))
+        else:
+            call_trace = None
+
         for impl in matching_impls:
             prioritized = impl.backend.name in ordered_backends
             info = DispatchInfo(relevant_types, prioritized)
@@ -460,9 +494,16 @@ class Dispatchable:
                 if impl.function is NotFound:
                     impl.function = from_identifier(impl.function_symbol)
 
+                if call_trace is not None:
+                    call_trace.append((impl.backend.name, "called"))
+
                 if impl.uses_info:
                     return impl.function(info, *args, **kwargs)
                 else:
                     return impl.function(*args, **kwargs)
+            elif trace is not None and impl.should_run is not None:
+                call_trace.append((impl.backend.name, "deferred in should run"))
 
+        if call_trace is not None:
+            call_trace.append(("default fallback", "called"))
         return self._default_func(*args, **kwargs)

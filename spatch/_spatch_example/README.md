@@ -13,11 +13,21 @@ can be run to generate their `functions` context (i.e. if you add more functions
 For users we have the following basic capabilities.  Starting with normal
 type dispatching:
 ```
+import pprint
 from spatch._spatch_example.library import divide, backend_opts
+
+# trace globally (or use `with backend_opts(trace=True) as trace`).
+_opts = backend_opts(trace=True)  # need to hold on to _opts to not exit
+trace = _opts.__enter__()
 
 divide(1, 2)  # use the normal library implementation (int inputs)
 divide(1., 2.)  # uses backend 1 (float input)
 divide(1j, 2.)  # uses backend 2 (complex input)
+
+pprint.pprint(trace[-3:])
+# [('spatch._spatch_example.library:divide', [('default', 'called')]),
+#  ('spatch._spatch_example.library:divide', [('backend1', 'called')]),
+#  ('spatch._spatch_example.library:divide', [('backend2', 'called')])]
 ```
 
 The user can use `backend_opts` to modify the dispatching behavior.  At the moment
@@ -35,6 +45,10 @@ with backend_opts(prioritize="backend1"):
 # Similarly backend 2 supports floats, so we can prefer it over backend 1
 with backend_opts(prioritize="backend2"):
     divide(1., 2.)  # now uses backend2
+
+pprint.pprint(trace[-2:])
+# [('spatch._spatch_example.library:divide', [('backend1', 'called')]),
+#  ('spatch._spatch_example.library:divide', [('backend2', 'called')])] 
 ```
 The default priorities are based on the backend types or an explicit request to have
 a higher priority by a backend (otherwise default first and then alphabetically).
@@ -69,6 +83,11 @@ with backend_opts(type=complex):
 with backend_opts(type=float, prioritize="backend2"):
     # we can of course combine both type and prioritize.
     divide(1, 2)  # backend 2 with float result (int inputs).
+
+pprint.pprint(trace[-3:])
+# [('spatch._spatch_example.library:divide', [('backend1', 'called')]),
+#  ('spatch._spatch_example.library:divide', [('backend2', 'called')]),
+#  ('spatch._spatch_example.library:divide', [('backend2', 'called')])]
 ```
 How types work precisely should be decided by the backend, but care should be taken.
 E.g. it is not clear if returning a float is OK when the user said `type=complex`.
