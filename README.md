@@ -65,6 +65,42 @@ with backend_opts(prioritize="gpu_backend"):
 
 <!-- SPHINX-STOP -->
 
+# Development status
+
+(Please bear in mind that this section may get outdated)
+
+`spatch` should be functional but is not complete at this point and
+it should be considered a prototype when it comes to API stability.
+
+Some examples for missing things we are still working on:
+* Configuration via environment variables is missing.
+* We only implemented exact type checks.  We expect subclass checks
+  and support for abstract types (e.g. "Array API enabled") to happen
+  in the future.
+* `spatch` is very much designed to be fast but that doesn't mean it
+  is particularly fast yet.  We may need to optimize parts (potentially
+  lowering parts to a compiled language).
+* We have not implemented tools to test backends, e.g. against parts
+  of the original library.  We expect that "spatch" actually includes most
+  tools to do this.  For example, we could define a `convert` function
+  that backends can implement to convert arguments in tests as needed.
+
+There are also many smaller or bigger open questions and those include whether
+the API proposed here is actually quite what we want.
+Other things are for example whether we want API like:
+* `dispatchable.invoke(type=, backend=)`.
+* Maybe libraries should use `like=` in functions that take no dispatchable
+  arguments.
+* How do we do classes. We could provide "dispatchable methods" that "freeze"
+  the dispatching state/which backend is used for classes that are statefull
+  but where the state is only decided later, such as the `.fit()` method in
+  `sklearn`.
+
+We can also see many small conveniences, for example:
+* Extract the dispatchable arguments from type annotations.
+* Support a magic `Defer` return, rather than the `should_run` call.
+
+
 # Usage examples
 
 Please see the example readme for a (very minimal) usage example.
