@@ -13,5 +13,6 @@ Modifying and tracing dispatching
 
 (This functionality will be re-exposed by the library in some form.)
 
-.. autofunction:: spatch.backend_system.BackendSystem.backend_opts
-
+.. autoclass:: spatch.backend_system.BackendOpts
+    :class-doc-from: init
+    :members: enable_globally

@@ -23,14 +23,14 @@ import pprint
 from spatch._spatch_example.library import divide, backend_opts
 
 # trace globally (or use `with backend_opts(trace=True) as trace`).
-_opts = backend_opts(trace=True)  # need to hold on to _opts to not exit
-trace = _opts.__enter__()
+opts = backend_opts(trace=True)  # need to hold on to _opts to not exit
+opts.enable_globally()
 
 divide(1, 2)  # use the normal library implementation (int inputs)
 divide(1., 2.)  # uses backend 1 (float input)
 divide(1j, 2.)  # uses backend 2 (complex input)
 
-pprint.pprint(trace[-3:])
+pprint.pprint(opts.trace)
 # [('spatch._spatch_example.library:divide', [('default', 'called')]),
 #  ('spatch._spatch_example.library:divide', [('backend1', 'called')]),
 #  ('spatch._spatch_example.library:divide', [('backend2', 'called')])]
@@ -52,7 +52,7 @@ with backend_opts(prioritize="backend1"):
 with backend_opts(prioritize="backend2"):
     divide(1., 2.)  # now uses backend2
 
-pprint.pprint(trace[-2:])
+pprint.pprint(opts.trace[-2:])
 # [('spatch._spatch_example.library:divide', [('backend1', 'called')]),
 #  ('spatch._spatch_example.library:divide', [('backend2', 'called')])] 
 ```
@@ -90,7 +90,7 @@ with backend_opts(type=float, prioritize="backend2"):
     # we can of course combine both type and prioritize.
     divide(1, 2)  # backend 2 with float result (int inputs).
 
-pprint.pprint(trace[-3:])
+pprint.pprint(opts.trace[-3:])
 # [('spatch._spatch_example.library:divide', [('backend1', 'called')]),
 #  ('spatch._spatch_example.library:divide', [('backend2', 'called')]),
 #  ('spatch._spatch_example.library:divide', [('backend2', 'called')])]

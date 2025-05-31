@@ -86,6 +86,193 @@ def compare_backends(backend1, backend2):
     return -cmp2
 
 
+
+class BackendOpts:
+    # Base-class, we create a new subclass for each backend system.
+    _dispatch_state = None
+    _backend_system = None
+    __slots__ = ("backends", "type", "trace", "_state", "_token")
+
+    def __init__(self, *, prioritize=(), disable=(), type=None, trace=False):
+        """Customize or query the backend dispatching behavior.
+
+        Context manager to allow customizing the dispatching behavior.
+        Instantiating the context manager fetches the current dispatching state,
+        modifies it as requested, and then stores the state.
+        You can use this context multiple times (but not nested).
+        ``enable_globally()`` can be used for convenience but should only
+        be used from the main program.
+
+        Initializing ``BackendOpts`` without arguments can be used to query
+        the current state.
+
+        .. warning::
+            When modifying dispatching behavior you must be aware that this
+            may have side effects on your program.  See details in notes.
+
+        Parameters
+        ----------
+        prioritize : str or list of str
+            The backends to prioritize, this may also enable a backend that
+            would otherwise never be chosen.
+            Prioritization nests, outer prioritization remain active.
+        disable : str or list of str
+            Specific backends to disable.  This nests, outer disabled are
+            still disabled (unless prioritized).
+        type : type
+            A type to dispatch for. Functions will behave as if this type was
+            used when calling (additionally to types passed).
+            This is a way to enforce use of this type (and thus backends using
+            it). But if used for a larger chunk of code it can clearly break
+            type assumptions easily.
+            (The type argument of a previous call is replaced.)
+
+            .. note::
+                If no version of a function exists that supports this type,
+                then dispatching will currently fail.  It may try without the
+                type in the future to allow a graceful fallback.
+
+        trace : bool
+            If ``True`` entering returns a list and this list will contain
+            information for each call to a dispatchable function.
+            (When nesting, an outer existing tracing is currently paused.)
+
+            .. note::
+                Tracing is considered for debugging/human readers and does not
+                guarantee a stable API for the ``trace`` result.
+
+        Attributes
+        ----------
+        backends
+            List of active backend names in order of priority (if the type
+            is set, not all of may not be applicable).
+        type
+            The type to dispatch for within this context.
+        trace
+            The trace object (currenly a list as described in the examples).
+            The trace is also returned when entering the context.
+
+        Notes
+        -----
+        Both ``prioritize`` and ``type`` can modify behavior of the contained
+        block in significant ways.
+
+        For ``prioritize=`` this depends on the backend.  A backend may for
+        example result in lower precision results.  Assuming no bugs, a backend
+        should return roughly equivalent results.
+
+        For ``type=`` code behavior will change to work as if you were using this
+        type.  This will definitely change behavior.
+        I.e. many functions may return the given type. Sometimes this may be useful
+        to modify behavior of code wholesale.
+
+        Especially if you call a third party library, either of these changes may
+        break assumptions in their code and it while a third party may ensure the
+        correct type for them locally it is not a bug to not do so.
+
+        Examples
+        --------
+        This example is based on a hypothetical ``cucim`` backend for ``skimage``:
+
+        >>> with skimage.backend_opts(prioritize="cucim"):
+        ...     ...
+
+        Which might use cucim also for NumPy inputs (but return NumPy arrays then).
+        (I.e. ``cucim`` would use the fact that it is prioritized here to decide
+        it is OK to convert NumPy arrays -- it could still defer for speed reasons.)
+
+        On the other hand:
+
+        >>> with skimage.backend_opts(type=cupy.ndarray):
+        ...     ...
+
+        Would guarantee that we work with CuPy arrays that the a returned array
+        is a CuPy array.  Together with ``prioritize="cucim"`` it ensure the
+        cucim version is used (otherwise another backend may be preferred if it
+        also supports CuPy arrays) or cucim may choose to require prioritization
+        to accept NumPy arrays.
+
+        Backends should simply document their behavior with ``backend_opts`` and
+        which usage pattern they see for their users.
+
+        Tracing calls can be done using, where ``trace`` is a list of informations for
+        each call.  This contains a tuple of the function identifier and a list of
+        backends called (typically exactly one, but it will also note if a backend deferred
+        via ``should_run``).
+
+        >>> with skimage.backend_opts(trace=True) as trace:
+        ...     ...
+
+        """
+        if isinstance(prioritize, str):
+            prioritize = (prioritize,)
+        else:
+            prioritize = tuple(prioritize)
+
+        if isinstance(disable, str):
+            disable = (disable,)
+        else:
+            disable = tuple(disable)
+
+        # TODO: I think these should be warnings maybe.
+        for b in prioritize + disable:
+            if b not in self._backend_system.backends:
+                raise ValueError(f"Backend '{b}' not found.")
+
+        if type is not None:
+            if not self._backend_system.known_type(type, primary=True):
+                raise ValueError(
+                    f"Type '{type}' not a valid primary type of any backend. "
+                    "It is impossible to enforce use of this type for any function.")
+
+        ordered_backends, _, curr_trace = self._dispatch_state.get()
+        ordered_backends = prioritize + ordered_backends
+
+        # TODO: We could/should have a faster deduplication here probably
+        #       (i.e. reduce the overhead of entering the context manager)
+        ordered_backends = tuple({b: None for b in ordered_backends if b not in disable})
+
+        if trace:
+            # replace the current trace state.
+            curr_trace = []
+
+        self.backends = ordered_backends
+        self._state = (ordered_backends, type, curr_trace)
+        self.trace = curr_trace
+        self._token = None
+
+    def enable_globally(self):
+        """Enforce the current backend options globalle.
+
+        Setting this state globally should only be done by the end user
+        and never by a library.  This method will issue a warning if the
+        dispatching state has been previously modified programatically.
+        """
+        curr_state = self._dispatch_state.get(None)  # None used before default
+        # If the state was never set or the state matches (ignoring trace)
+        # and there was no trace registered before this is OK. Otherwise warn.
+        if curr_state is not None and (
+                curr_state[:-1] != self._state[:-1]
+                or curr_state[-1] is not None):
+            warnings.warn(
+                "Backend options were previously modified, global change of the "
+                "backends state should only be done once from the main program.",
+                UserWarning,
+            )
+        self._token = self._dispatch_state.set(self._state)
+
+    def __enter__(self):
+        if self._token is not None:
+            raise RuntimeError("Cannot enter backend options more than once (at a time).")
+        self._token = self._dispatch_state.set(self._state)
+
+        return self.trace
+
+    def __exit__(self, *exc_info):
+        self._dispatch_state.reset(self._token)
+        self._token = None
+
+
 class BackendSystem:
     def __init__(self, group, default_primary_types=()):
         """Create a backend system that provides a @dispatchable decorator.
@@ -239,140 +426,16 @@ class BackendSystem:
 
         return wrap_callable
 
-    @contextlib.contextmanager
-    def backend_opts(self, *, prioritize=(), disable=(), type=None, trace=False):
-        """Customize the backend dispatching behavior.
-
-        Context manager to allow customizing the dispatching behavior.
-
-        .. note::
-            For the moment use `backend_opts().__enter__()` for global
-            configuration.
-
-        .. warning::
-            When modifying dispatching behavior you must be aware that this
-            may have side effects on your program.  See details in notes.
-
-        Parameters
-        ----------
-        prioritize : str or list of str
-            The backends to prioritize, this may also enable a backend that
-            would otherwise never be chosen.
-            Prioritization nests, outer prioritization remain active.
-        disable : str or list of str
-            Specific backends to disable.  This nests, outer disabled are
-            still disabled (unless prioritized).
-        type : type
-            A type to dispatch for. Functions will behave as if this type was
-            used when calling (additionally to types passed).
-            This is a way to enforce use of this type (and thus backends using
-            it). But if used for a larger chunk of code it can clearly break
-            type assumptions easily.
-            (The type argument of a previous call is replaced.)
-
-            .. note::
-                If no version of a function exists that supports this type,
-                then dispatching will currently fail.  It may try without the
-                type in the future to allow a graceful fallback.
-
-        trace : bool
-            If ``True`` entering returns a list and this list will contain
-            information for each call to a dispatchable function.
-            (When nesting, an outer existing tracing is currently paused.)
-
-            .. note::
-                Tracing is considered for debugging/human readers and does not
-                guarantee a stable API for the ``trace`` result.
-
-        Notes
-        -----
-        Both ``prioritize`` and ``type`` can modify behavior of the contained
-        block in significant ways.
-
-        For ``prioritize=`` this depends on the backend.  A backend may for
-        example result in lower precision results.  Assuming no bugs, a backend
-        should return roughly equivalent results.
-
-        For ``type=`` code behavior will change to work as if you were using this
-        type.  This will definitely change behavior.
-        I.e. many functions may return the given type. Sometimes this may be useful
-        to modify behavior of code wholesale.
-
-        Especially if you call a third party library, either of these changes may
-        break assumptions in their code and it while a third party may ensure the
-        correct type for them locally it is not a bug to not do so.
-
-        Examples
-        --------
-        This example is based on a hypothetical ``cucim`` backend for ``skimage``:
-
-        >>> with skimage.backend_opts(prioritize="cucim"):
-        ...     ...
-
-        Which might use cucim also for NumPy inputs (but return NumPy arrays then).
-        (I.e. ``cucim`` would use the fact that it is prioritized here to decide
-        it is OK to convert NumPy arrays -- it could still defer for speed reasons.)
-
-        On the other hand:
-
-        >>> with skimage.backend_opts(type=cupy.ndarray):
-        ...     ...
-
-        Would guarantee that we work with CuPy arrays that the a returned array
-        is a CuPy array.  Together with ``prioritize="cucim"`` it ensure the
-        cucim version is used (otherwise another backend may be preferred if it
-        also supports CuPy arrays) or cucim may choose to require prioritization
-        to accept NumPy arrays.
-
-        Backends should simply document their behavior with ``backend_opts`` and
-        which usage pattern they see for their users.
-
-        Tracing calls can be done using, where ``trace`` is a list of informations for
-        each call.  This contains a tuple of the function identifier and a list of
-        backends called (typically exactly one, but it will also note if a backend deferred
-        via ``should_run``).
-
-        >>> with skimage.backend_opts(trace=True) as trace:
-        ...     ...
-
-        """
-        if isinstance(prioritize, str):
-            prioritize = (prioritize,)
-        else:
-            prioritize = tuple(prioritize)
-
-        if isinstance(disable, str):
-            disable = (disable,)
-        else:
-            disable = tuple(disable)
-
-        # TODO: I think these should be warnings maybe.
-        for b in prioritize + disable:
-            if b not in self.backends:
-                raise ValueError(f"Backend '{b}' not found.")
-
-        if type is not None:
-            if not self.known_type(type, primary=True):
-                raise ValueError(
-                    f"Type '{type}' not a valid primary type of any backend. "
-                    "It is impossible to enforce use of this type for any function.")
-
-        ordered_backends, _, curr_trace = self._dispatch_state.get()
-        ordered_backends = prioritize + ordered_backends
-
-        # TODO: We could/should have a faster deduplication here probably
-        #       (i.e. reduce the overhead of entering the context manager)
-        ordered_backends = tuple({b: None for b in ordered_backends if b not in disable})
-
-        if trace:
-            # replace the current trace state.
-            curr_trace = []
-
-        token = self._dispatch_state.set((ordered_backends, type, curr_trace))
-        try:
-            yield curr_trace
-        finally:
-            self._dispatch_state.reset(token)
+    @property
+    def backend_opts(self):
+        """Property returning a :py:class:`BackendOpts` class specific to this library
+        (tied to this backend system).
+        """        
+        return type(
+            f"BackendOpts",
+            (BackendOpts,),
+            {"_dispatch_state": self._dispatch_state, "_backend_system": self},
+        )
 
 
 # TODO: Make it a nicer singleton
