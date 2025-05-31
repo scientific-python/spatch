@@ -53,8 +53,8 @@ class Backend:
         return False
 
     def compare_with_other(self, other):
-        if other in self.prioritize_over_backends:
-            return 1
+        if other.name in self.prioritize_over_backends:
+            return 2
 
         # If our primary types are a subset of the other, we match more
         # precisely/specifically.
@@ -68,15 +68,22 @@ class Backend:
 
 
 def compare_backends(backend1, backend2):
-    # Sort by the backends compare function (i.e. type hierarchy and manual order)
-    cmp = backend1.compare_with_other(backend2)
-    if cmp is not NotImplemented:
-        return cmp
-    cmp = backend2.compare_with_other(backend1)
-    if cmp is not NotImplemented:
-        return -cmp
+    # Sort by the backends compare function (i.e. type hierarchy and manual order).
+    # We default to a type based comparisons but allow overriding this, so check
+    # both ways (to find the overriding).  This also find inconcistencies.
+    cmp1 = backend1.compare_with_other(backend2)
+    cmp2 = backend2.compare_with_other(backend1)
+    if cmp1 is NotImplemented and cmp2 is NotImplemented:
+        return 0
 
-    return 0
+    if cmp1 == cmp2:
+        raise RuntimeError(
+            "Backends {backend1.name} and {backend2.name} report inconsistent "
+            "priorities (this means they are buggy).  You can manually set "
+            "a priority or remove one of the backends.")
+    if cmp1 != 0:
+        return cmp1
+    return -cmp2
 
 
 class BackendSystem:
@@ -128,10 +135,12 @@ class BackendSystem:
         ts = graphlib.TopologicalSorter(graph)
         try:
             order = tuple(ts.static_order())
-        except graphlib.CycleError:
+        except graphlib.CycleError as e:
+            cycle = e.args[1]
             raise RuntimeError(
                 "Backend dependencies form a cycle.  This is a bug in a backend, you can "
-                "fix this by doing <not yet implemented>.")
+                "fix this by doing <not yet implemented>.\n"
+                f"The backends creating a cycle are: {cycle}")
 
         # Finalize backends to be a dict sorted by priority.
         self.backends = {b: self.backends[b] for b in order}

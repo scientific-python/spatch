@@ -22,7 +22,7 @@ def divide(info, x, y):
     # Because the default implementation returns ints for int inputs
     # we do this as well here.  We _must_ use `info.relevant_types`
     # to make this decision (to honor the `backend_opts` state)
-    if float not in info.relevant_types:
+    if float not in info.types:
         return x // y  # mirror library implementation for ints
     return x / y
 
