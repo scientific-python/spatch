@@ -4,6 +4,7 @@ import contextvars
 from dataclasses import dataclass
 import functools
 import graphlib
+import os
 import importlib_metadata
 import warnings
 import textwrap
@@ -29,6 +30,8 @@ class Backend:
     def from_namespace(cls, info):
         self = cls()
         self.name = info.name
+        if not self.name.isidentifier():
+            raise ValueError("Invalid backend name {self.name!r}, must be a valid identifier.")
         self.functions = info.functions
 
         self.primary_types = frozenset(info.primary_types)
@@ -67,7 +70,13 @@ class Backend:
         return NotImplemented  # unknown order (must check other)
 
 
-def compare_backends(backend1, backend2):
+def compare_backends(backend1, backend2, prioritize_over):
+    # Environment variable prioritization beats everything:
+    if (prio := prioritize_over.get(backend1.name)) and backend2.name in prio:
+        return 3
+    elif (prio := prioritize_over.get(backend2.name)) and backend1.name in prio:
+        return -3
+
     # Sort by the backends compare function (i.e. type hierarchy and manual order).
     # We default to a type based comparisons but allow overriding this, so check
     # both ways (to find the overriding).  This also find inconcistencies.
@@ -85,6 +94,56 @@ def compare_backends(backend1, backend2):
         return cmp1
     return -cmp2
 
+
+def _modified_state(
+    backend_system,
+    curr_state,
+    prioritize,
+    disable,
+    type=None,
+    trace=None,
+    unknown_backends="raise",
+):
+    if isinstance(prioritize, str):
+        prioritize = (prioritize,)
+    else:
+        prioritize = tuple(prioritize)
+
+    if isinstance(disable, str):
+        disable = (disable,)
+    else:
+        disable = tuple(disable)
+
+    # TODO: I think these should be warnings maybe.
+    for b in prioritize + disable:
+        if b not in backend_system.backends:
+            if unknown_backends == "raise":
+                raise ValueError(f"Backend '{b}' not found.")
+            elif unknown_backends == "ignore":
+                pass
+            else:
+                raise ValueError(
+                    "_modified_state() unknown_backends must be raise or ignore")
+
+    if type is not None:
+        if not backend_system.known_type(type, primary=True):
+            raise ValueError(
+                f"Type '{type}' not a valid primary type of any backend. "
+                "It is impossible to enforce use of this type for any function.")
+
+    ordered_backends, _, prioritized, curr_trace = curr_state
+    prioritized = prioritized | frozenset(prioritize)
+    ordered_backends = prioritize + ordered_backends
+
+    # TODO: We could/should have a faster deduplication here probably
+    #       (i.e. reduce the overhead of entering the context manager)
+    ordered_backends = tuple({b: None for b in ordered_backends if b not in disable})
+
+    if trace:
+        # replace the current trace state.
+        curr_trace = []
+
+    return (ordered_backends, type, prioritized, curr_trace)
 
 
 class BackendOpts:
@@ -211,43 +270,12 @@ class BackendOpts:
         ...     ...
 
         """
-        if isinstance(prioritize, str):
-            prioritize = (prioritize,)
-        else:
-            prioritize = tuple(prioritize)
-
-        if isinstance(disable, str):
-            disable = (disable,)
-        else:
-            disable = tuple(disable)
-
-        # TODO: I think these should be warnings maybe.
-        for b in prioritize + disable:
-            if b not in self._backend_system.backends:
-                raise ValueError(f"Backend '{b}' not found.")
-
-        if type is not None:
-            if not self._backend_system.known_type(type, primary=True):
-                raise ValueError(
-                    f"Type '{type}' not a valid primary type of any backend. "
-                    "It is impossible to enforce use of this type for any function.")
-
-        ordered_backends, _, prioritized, curr_trace = self._dispatch_state.get()
-        prioritized = prioritized | frozenset(prioritize)
-        ordered_backends = prioritize + ordered_backends
-
-        # TODO: We could/should have a faster deduplication here probably
-        #       (i.e. reduce the overhead of entering the context manager)
-        ordered_backends = tuple({b: None for b in ordered_backends if b not in disable})
-
-        if trace:
-            # replace the current trace state.
-            curr_trace = []
-
-        self.backends = ordered_backends
-        self._state = (ordered_backends, type, prioritized, curr_trace)
-        self.trace = curr_trace
-        self.prioritized = prioritized
+        self._state = _modified_state(
+            self._backend_system,
+            self._dispatch_state.get(),
+            prioritize=prioritize, disable=disable, type=type, trace=trace)
+        # unpack new state to provide information:
+        self.backends, self.prioritized, self.type, self.trace = self._state
         self._token = None
 
     def enable_globally(self):
@@ -286,7 +314,7 @@ class BackendOpts:
         self._token = None
 
     def __call__(self, func):
-        """Decorate a function to freeze it's dispatching state.
+        """Decorate a function to freeze its dispatching state.
 
         ``BackendOpts`` can be used as a decorator, it means freezing the
         state early (user context around call is ignored).
@@ -330,7 +358,7 @@ class BackendOpts:
 
 
 class BackendSystem:
-    def __init__(self, group, default_primary_types=()):
+    def __init__(self, group, environ_prefix, default_primary_types=()):
         """Create a backend system that provides a @dispatchable decorator.
 
         The backend system also has provides the ``backend_opts`` context manager
@@ -345,6 +373,14 @@ class BackendSystem:
         group : str
             The group of the backend entry points.  All backends are entry points
             that are immediately loaded.
+        environ_prefix : str
+            Prefix for environment variables to modify the dispatching behavior.
+            ``spatch`` currently queries the following variables (see `for_users`).
+
+            - ``f"{environ_prefix}_SET_ORDER"``
+            - ``f"{environ_prefix}_PRIORITIZE"``
+            - ``f"{environ_prefix}_DISABLE"``
+
         default_primary_types : frozenset
             The set of types that are considered primary by default.  Types listed
             here must be added as "secondary" types to backends if they wish
@@ -358,9 +394,64 @@ class BackendSystem:
         self.backends = {"default": Backend.default_backend(default_primary_types)}
         self._default_primary_types = frozenset(default_primary_types)
 
+        try:
+            set_order = os.environ.get(f"{environ_prefix}_SET_ORDER", "").split(",")
+            set_order = [_ for _ in set_order if _]  # ignore empty chunks
+            prioritize_over = {}
+            for orders in set_order:
+                orders = orders.split(">")
+                prev_b = None
+                for b in orders:
+                    if not b.isidentifier():
+                        raise ValueError(
+                            f"Name {b!r} in {environ_prefix}_SET_ORDER is not a valid backend name.")
+                    if prev_b is not None:
+                        prioritize_over.setdefault(prev_b, set()).add(b)
+                    prev_b = b
+        except Exception as e:
+            warnings.warn(
+                f"Ignoring invalid environment variable {environ_prefix}_SET_ORDER "
+                f"due to error: {e}",
+                UserWarning,
+            )
+
+        try:
+            prioritize = os.environ.get(f"{environ_prefix}_PRIORITIZE", "").split(",")
+            prioritize = [_ for _ in prioritize if _]  # ignore empty chunks
+            for b in prioritize:
+                if not b.isidentifier():
+                    raise ValueError(
+                        f"Name {b!r} in {environ_prefix}_PRIORITIZE is not a valid backend name.")
+        except Exception as e:
+            warnings.warn(
+                f"Ignoring invalid environment variable {environ_prefix}_PRIORITIZE "
+                f"due to error: {e}",
+                UserWarning,
+            )
+
+        try:
+            disable = os.environ.get(f"{environ_prefix}_DISABLE", "").split(",")
+            disable = [_ for _ in disable if _]  # ignore empty chunks
+            for b in disable:
+                if not b.isidentifier():
+                    raise ValueError(
+                        f"Name {b!r} in {environ_prefix}_PRIORITIZE is not a valid backend name.")
+        except Exception as e:
+            warnings.warn(
+                f"Ignoring invalid environment variable {environ_prefix}_SET_ORDER "
+                f"due to error: {e}",
+                UserWarning,
+            )
+
         eps = importlib_metadata.entry_points(group=group)
         for ep in eps:
-            self.backend_from_namespace(ep.load())
+            try:
+                self.backend_from_namespace(ep.load())
+            except Exception as e:
+                warnings.warn(
+                    f"Not loading invalid backend {ep.name} due to error: {e}",
+                    UserWarning,
+                )
 
         # The topological sorter uses insertion sort, so sort backend names
         # alphabetically first.  But ensure that we put default first.
@@ -369,7 +460,7 @@ class BackendSystem:
         graph.update({b: set() for b in backends})
         for i, n_b1 in enumerate(backends):
             for n_b2 in backends[i+1:]:
-                cmp = compare_backends(self.backends[n_b1], self.backends[n_b2])
+                cmp = compare_backends(self.backends[n_b1], self.backends[n_b2], prioritize_over)
                 if cmp < 0:
                     graph[n_b1].add(n_b2)
                 elif cmp > 0:
@@ -381,16 +472,23 @@ class BackendSystem:
         except graphlib.CycleError as e:
             cycle = e.args[1]
             raise RuntimeError(
-                "Backend dependencies form a cycle.  This is a bug in a backend, you can "
-                "fix this by doing <not yet implemented>.\n"
+                f"Backend dependencies form a cycle.  This is a bug in a backend or your"
+                f"environment variable settings.  You can fix this by using the environemnt:\n"
+                f"  - {environ_prefix}_SET_ORDER to fix the order for the offending backend(s).\n"
+                f"  - {environ_prefix}_PRIORITIZE to explicitly prioritize/enable a preferred backend.\n"
+                f"  - {environ_prefix}_DISABLE to disable the offending backend(s).\n"
                 f"The backends creating a cycle are: {cycle}")
 
         # Finalize backends to be a dict sorted by priority.
         self.backends = {b: self.backends[b] for b in order}
         # The state is the ordered (active) backends and the prefered type (None)
         # and the trace (None as not tracing).
+        base_state = (order, None, frozenset(), None)
+        # apply the prioritize and disable env variabels to the base state:
+        state = _modified_state(
+            self, base_state, prioritize=prioritize, disable=disable, unknown_backends="ignore")
         self._dispatch_state = contextvars.ContextVar(
-            f"{group}.dispatch_state", default=(order, None, frozenset(), None))
+            f"{group}.dispatch_state", default=state)
 
     @functools.lru_cache(maxsize=128)
     def known_type(self, relevant_type, primary=False):

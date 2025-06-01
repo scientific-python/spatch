@@ -2,7 +2,8 @@
 from spatch.backend_system import BackendSystem
 
 _backend_system = BackendSystem(
-    "_spatch_example_backends",
+    "_spatch_example_backends",  # entry point group
+    "_SPATCH_EXAMPLE_BACKENDS",  # environment variable prefix
     default_primary_types=["builtins:int"]
 )
 
