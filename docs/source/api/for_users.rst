@@ -1,3 +1,5 @@
+.. _for_users:
+
 User API
 ========
 

@@ -375,7 +375,7 @@ class BackendSystem:
             that are immediately loaded.
         environ_prefix : str
             Prefix for environment variables to modify the dispatching behavior.
-            ``spatch`` currently queries the following variables (see `for_users`).
+            ``spatch`` currently queries the following variables (see :ref:`for_users`).
 
             - ``f"{environ_prefix}_SET_ORDER"``
             - ``f"{environ_prefix}_PRIORITIZE"``
