@@ -91,7 +91,7 @@ class BackendOpts:
     # Base-class, we create a new subclass for each backend system.
     _dispatch_state = None
     _backend_system = None
-    __slots__ = ("backends", "type", "trace", "_state", "_token")
+    __slots__ = ("backends", "prioritized", "type", "trace", "_state", "_token")
 
     def __init__(self, *, prioritize=(), disable=(), type=None, trace=False):
         """Customize or query the backend dispatching behavior.
@@ -100,11 +100,14 @@ class BackendOpts:
         Instantiating the context manager fetches the current dispatching state,
         modifies it as requested, and then stores the state.
         You can use this context multiple times (but not nested).
-        ``enable_globally()`` can be used for convenience but should only
-        be used from the main program.
+        :py:func:`~BackendOpts.enable_globally()` can be used for convenience but
+        should only be used from the main program.
 
         Initializing ``BackendOpts`` without arguments can be used to query
         the current state.
+
+        See :py:func:`~BackendOpts.__call__` for information about use as a
+        function decorator.
 
         .. warning::
             When modifying dispatching behavior you must be aware that this
@@ -143,14 +146,18 @@ class BackendOpts:
 
         Attributes
         ----------
-        backends
-            List of active backend names in order of priority (if the type
-            is set, not all of may not be applicable).
+        backends : tuple of str
+            Tuple of active backend names in order of priority. If type
+            is set, not all will be applicable and type specialized backends
+            have typically a lower priority since they will be chosen based
+            on input types.
+        prioritized : frozenset
+            Frozenset of currently prioritized backends.
         type
             The type to dispatch for within this context.
         trace
             The trace object (currenly a list as described in the examples).
-            The trace is also returned when entering the context.
+            If used, the trace is also returned when entering the context.
 
         Notes
         -----
@@ -167,8 +174,8 @@ class BackendOpts:
         to modify behavior of code wholesale.
 
         Especially if you call a third party library, either of these changes may
-        break assumptions in their code and it while a third party may ensure the
-        correct type for them locally it is not a bug to not do so.
+        break assumptions in their code and while a third party may ensure the
+        correct type for them locally it is not a bug for them not to do so.
 
         Examples
         --------
@@ -225,7 +232,8 @@ class BackendOpts:
                     f"Type '{type}' not a valid primary type of any backend. "
                     "It is impossible to enforce use of this type for any function.")
 
-        ordered_backends, _, curr_trace = self._dispatch_state.get()
+        ordered_backends, _, prioritized, curr_trace = self._dispatch_state.get()
+        prioritized = prioritized | frozenset(prioritize)
         ordered_backends = prioritize + ordered_backends
 
         # TODO: We could/should have a faster deduplication here probably
@@ -237,15 +245,20 @@ class BackendOpts:
             curr_trace = []
 
         self.backends = ordered_backends
-        self._state = (ordered_backends, type, curr_trace)
+        self._state = (ordered_backends, type, prioritized, curr_trace)
         self.trace = curr_trace
+        self.prioritized = prioritized
         self._token = None
 
     def enable_globally(self):
-        """Enforce the current backend options globalle.
+        """Apply these backend options globally.
 
         Setting this state globally should only be done by the end user
-        and never by a library.  This method will issue a warning if the
+        and never by a library. Global change of behavior may modify
+        unexpected parts of the code (e.g. in third party code) so that it
+        is safer to use the contextmanager ``with`` statement instead.
+
+        This method will issue a warning if the
         dispatching state has been previously modified programatically.
         """
         curr_state = self._dispatch_state.get(None)  # None used before default
@@ -271,6 +284,49 @@ class BackendOpts:
     def __exit__(self, *exc_info):
         self._dispatch_state.reset(self._token)
         self._token = None
+
+    def __call__(self, func):
+        """Decorate a function to freeze it's dispatching state.
+
+        ``BackendOpts`` can be used as a decorator, it means freezing the
+        state early (user context around call is ignored).
+        In other words, the following two patterns are very different, because
+        for the decorator, ``backend_opts`` is called outside of the function::
+
+            @backend_opts(...)
+            def func():
+                # code
+
+            def func():
+                with backend_opts(...):
+                    # code
+
+        .. note::
+            An option here is to add ``isolated=False`` to allow mutating
+            the context at call-time/time of entering (``isolated=False``
+            would do nothing in a simple context manager use-case).
+
+        Parameters
+        ----------
+        func : callable
+            The function to decorate.
+
+        Returns
+        -------
+        func : callable
+            The decorated function.
+        """
+        # In this form, allow entering multiple times by storing the token
+        # inside the wrapper functions locals
+        @functools.wraps(func)
+        def bakendopts_wrapped(*args, **kwargs):
+            _token = self._dispatch_state.set(self._state)
+            try:
+                return func(*args, **kwargs)
+            finally:
+                self._dispatch_state.reset(_token)
+
+        return bakendopts_wrapped
 
 
 class BackendSystem:
@@ -334,7 +390,7 @@ class BackendSystem:
         # The state is the ordered (active) backends and the prefered type (None)
         # and the trace (None as not tracing).
         self._dispatch_state = contextvars.ContextVar(
-            f"{group}.dispatch_state", default=(order, None, None))
+            f"{group}.dispatch_state", default=(order, None, frozenset(), None))
 
     @functools.lru_cache(maxsize=128)
     def known_type(self, relevant_type, primary=False):
@@ -587,8 +643,8 @@ class Dispatchable:
 
     def __call__(self, *args, **kwargs):
         relevant_types = self._get_relevant_types(*args, **kwargs)
-        # Prioritized backends is a tuple, so can be used as part of a cache key.
-        ordered_backends, type_, trace = self._backend_system._dispatch_state.get()
+        ordered_backends, type_, prioritized, trace = (
+            self._backend_system._dispatch_state.get())
         if type_ is not None:
             relevant_types.add(type_)
         relevant_types = frozenset(relevant_types)
@@ -610,8 +666,7 @@ class Dispatchable:
             call_trace = None
 
         for impl in matching_impls:
-            prioritized = impl.backend.name in ordered_backends
-            info = DispatchInfo(relevant_types, prioritized)
+            info = DispatchInfo(relevant_types, impl.backend.name in prioritized)
 
             if impl.should_run is NotFound:
                 impl.should_run = from_identifier(impl.should_run_symbol)

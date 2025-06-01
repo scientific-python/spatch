@@ -15,4 +15,4 @@ Modifying and tracing dispatching
 
 .. autoclass:: spatch.backend_system.BackendOpts
     :class-doc-from: init
-    :members: enable_globally
+    :members: enable_globally, __call__
