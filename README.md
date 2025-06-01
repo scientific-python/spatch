@@ -69,11 +69,10 @@ with backend_opts(prioritize="gpu_backend"):
 
 (Please bear in mind that this section may get outdated)
 
-`spatch` should be functional but is not complete at this point and
+`spatch` is functional but not complete at this point and
 it should be considered a prototype when it comes to API stability.
 
 Some examples for missing things we are still working on:
-* Configuration via environment variables is missing.
 * We only implemented exact type checks.  We expect subclass checks
   and support for abstract types (e.g. "Array API enabled") to happen
   in the future.
