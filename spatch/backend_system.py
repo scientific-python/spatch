@@ -98,8 +98,8 @@ def compare_backends(backend1, backend2, prioritize_over):
 def _modified_state(
     backend_system,
     curr_state,
-    prioritize,
-    disable,
+    prioritize=(),
+    disable=(),
     type=None,
     trace=None,
     unknown_backends="raise",
@@ -379,7 +379,7 @@ class BackendSystem:
 
             - ``f"{environ_prefix}_SET_ORDER"``
             - ``f"{environ_prefix}_PRIORITIZE"``
-            - ``f"{environ_prefix}_DISABLE"``
+            - ``f"{environ_prefix}_BLOCK"``
 
         default_primary_types : frozenset
             The set of types that are considered primary by default.  Types listed
@@ -430,9 +430,9 @@ class BackendSystem:
             )
 
         try:
-            disable = os.environ.get(f"{environ_prefix}_DISABLE", "").split(",")
-            disable = [_ for _ in disable if _]  # ignore empty chunks
-            for b in disable:
+            blocked = os.environ.get(f"{environ_prefix}_BLOCK", "").split(",")
+            blocked = [_ for _ in blocked if _]  # ignore empty chunks
+            for b in blocked:
                 if not b.isidentifier():
                     raise ValueError(
                         f"Name {b!r} in {environ_prefix}_PRIORITIZE is not a valid backend name.")
@@ -445,7 +445,13 @@ class BackendSystem:
 
         eps = importlib_metadata.entry_points(group=group)
         for ep in eps:
+            if ep.name in blocked:
+                continue
             try:
+                namespace = ep.load()
+                if ep.name != namespace.name:
+                    raise RuntimeError(
+                        f"Entrypoint name {ep.name!r} and actual name {namespace.name!r} mismatch.")
                 self.backend_from_namespace(ep.load())
             except Exception as e:
                 warnings.warn(
@@ -476,7 +482,7 @@ class BackendSystem:
                 f"environment variable settings.  You can fix this by using the environemnt:\n"
                 f"  - {environ_prefix}_SET_ORDER to fix the order for the offending backend(s).\n"
                 f"  - {environ_prefix}_PRIORITIZE to explicitly prioritize/enable a preferred backend.\n"
-                f"  - {environ_prefix}_DISABLE to disable the offending backend(s).\n"
+                f"  - {environ_prefix}_BLOCK to not load offending backend(s).\n"
                 f"The backends creating a cycle are: {cycle}")
 
         # Finalize backends to be a dict sorted by priority.
@@ -484,9 +490,8 @@ class BackendSystem:
         # The state is the ordered (active) backends and the prefered type (None)
         # and the trace (None as not tracing).
         base_state = (order, None, frozenset(), None)
-        # apply the prioritize and disable env variabels to the base state:
         state = _modified_state(
-            self, base_state, prioritize=prioritize, disable=disable, unknown_backends="ignore")
+            self, base_state, prioritize=prioritize, unknown_backends="ignore")
         self._dispatch_state = contextvars.ContextVar(
             f"{group}.dispatch_state", default=state)
 

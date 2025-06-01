@@ -17,10 +17,10 @@ at startup time.
   seperated by ``>``.  I.e. ``name1>name2,name3>name2`` means that ``name1``
   and ``name3`` are ordered before ``name1``.
   (The below environment variable take precedence.)
-* ``<SPECIFIC_NAME>_DISABLE``: Comma seperated list of backends.
-  This is the same as :py:class:`BackendOpts` ``disable=`` option.
 * ``<SPECIFIC_NAME>_PRIORITIZE``: Comma seperated list of backends.
   This is the same as :py:class:`BackendOpts` ``prioritize=`` option.
+* ``<SPECIFIC_NAME>_BLOCK``: Comma seperated list of backends.
+  This prevents loading the backends completely as if they were not installed.
 
 Note that unknown backend names are ignored in these variables, so check these
 carefully.

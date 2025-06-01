@@ -13,5 +13,5 @@ black = [
 ]
 
 [project.entry-points._spatch_example_backends]
-example_backend1 = 'spatch._spatch_example.entry_point'
-example_backend2 = 'spatch._spatch_example.entry_point2'
+backend1 = 'spatch._spatch_example.entry_point'
+backend2 = 'spatch._spatch_example.entry_point2'
