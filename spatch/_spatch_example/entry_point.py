@@ -11,7 +11,7 @@ functions = {
     "spatch._spatch_example.library:divide": {
         "function": "spatch._spatch_example.backend:divide",
         "should_run": "spatch._spatch_example.backend:divide._should_run",
-        "uses_info": True,
+        "uses_context": True,
         "additional_docs": "This implementation works well on floats.",
     }
 }

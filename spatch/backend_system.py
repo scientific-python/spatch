@@ -1,4 +1,3 @@
-
 import contextlib
 import contextvars
 from dataclasses import dataclass
@@ -9,6 +8,7 @@ import importlib_metadata
 import warnings
 import textwrap
 from types import MethodType
+from typing import Callable
 
 from spatch import from_identifier, get_identifier
 
@@ -386,7 +386,6 @@ class BackendSystem:
             here must be added as "secondary" types to backends if they wish
             to support them.
         """
-        # TODO: Should we use group and name, or is group enough?
         # TODO: We could define types of the fallback here, or known "scalar"
         #       (i.e. unimportant types).
         #       In a sense, the fallback should maybe itself just be a normal
@@ -398,8 +397,14 @@ class BackendSystem:
             set_order = os.environ.get(f"{environ_prefix}_SET_ORDER", "").split(",")
             set_order = [_ for _ in set_order if _]  # ignore empty chunks
             prioritize_over = {}
-            for orders in set_order:
-                orders = orders.split(">")
+            for orders_str in set_order:
+                orders = orders_str.split(">")
+                if len(set(orders)) != len(orders):
+                    # A backend showing up twice, means there is an inconsistency
+                    raise ValueError(
+                        f"Invalid order with duplicate backend in environment "
+                        f"variable {environ_prefix}_SET_ORDER:\n"
+                        f"    {orders_str}")
                 prev_b = None
                 for b in orders:
                     if not b.isidentifier():
@@ -407,6 +412,10 @@ class BackendSystem:
                             f"Name {b!r} in {environ_prefix}_SET_ORDER is not a valid backend name.")
                     if prev_b is not None:
                         prioritize_over.setdefault(prev_b, set()).add(b)
+                        # If an opposite prioritization was already set, discard it.
+                        # This allows `,backend2>backend1` to overrides a previous setting.
+                        if b in prioritize_over:
+                            prioritize_over[b].discard(prev_b)
                     prev_b = b
         except Exception as e:
             warnings.warn(
@@ -478,12 +487,12 @@ class BackendSystem:
         except graphlib.CycleError as e:
             cycle = e.args[1]
             raise RuntimeError(
-                f"Backend dependencies form a cycle.  This is a bug in a backend or your"
-                f"environment variable settings.  You can fix this by using the environemnt:\n"
-                f"  - {environ_prefix}_SET_ORDER to fix the order for the offending backend(s).\n"
-                f"  - {environ_prefix}_PRIORITIZE to explicitly prioritize/enable a preferred backend.\n"
-                f"  - {environ_prefix}_BLOCK to not load offending backend(s).\n"
-                f"The backends creating a cycle are: {cycle}")
+                f"Backends form a priority cycle.  This is a bug in a backend or your\n"
+                f"environment settings. Check the environment variable {environ_prefix}_SET_ORDER\n"
+                f"and change it for example to:\n"
+                f"    {environ_prefix}_SET_ORDER=\"{cycle[-1]}>{cycle[-2]}\"\n"
+                f"to break the offending cycle:\n"
+                f"    {'>'.join(cycle)}") from None
 
         # Finalize backends to be a dict sorted by priority.
         self.backends = {b: self.backends[b] for b in order}
@@ -597,42 +606,12 @@ class BackendSystem:
         )
 
 
-# TODO: Make it a nicer singleton
-NotFound = object()
+@dataclass(slots=True)
+class DispatchContext:
+    """Additional information passed to backends about the dispatching.
 
-
-class Implementation:
-    __slots__ = (
-        "backend",
-        "should_run_symbol",
-        "should_run",
-        "function_symbol",
-        "function",
-        "uses_info",
-    )
-
-    def __init__(self, backend, function_symbol, should_run_symbol=None, uses_info=False):
-        """The implementation of a function, internal information?
-        """
-        self.backend = backend
-        self.uses_info = uses_info
-
-        self.should_run_symbol = should_run_symbol
-        if should_run_symbol is None:
-            self.should_run = None
-        else:
-            self.should_run = NotFound
-
-        self.function = NotFound
-        self.function_symbol = function_symbol
-
-
-@dataclass
-class DispatchInfo:
-    """Additional information passed to backends.
-
-    ``DispatchInfo`` is passed as first (additional) argument to ``should_run``
-    and to a backend implementation (if desired).
+    ``DispatchContext`` is passed as first (additional) argument to
+    ``should_run``and to a backend implementation (if desired).
     Some backends will require the ``types`` attribute.
 
     Attributes
@@ -661,11 +640,63 @@ class DispatchInfo:
         to use this to decide that e.g. a NumPy array will be converted to a
         cupy array, but only if prioritized.
     """
-    # This must be a very light-weight object, since unless we cache it somehow
-    # we have to create it on most calls (although only if we use backends).
+    # The idea is for the context to be very light-weight so that specific
+    # information should be properties (because most likely we will never need it).
+    # This object can grow to provide more information to backends.
     types: tuple[type]
-    prioritized: bool
-    # Should we pass the original implementation here?
+    name: str
+    _state: tuple
+
+    @property
+    def prioritized(self):
+        return self.name in self._state[2]
+
+
+@dataclass(slots=True)
+class _Implementation:
+    # Represent the implementation of a function.  Both function and should_run
+    # are stored either as string identifiers or callables.
+    # (In theory, we could move `should_run` loading to earlier to not re-check it.)
+    backend: str
+    _function: Callable | str
+    should_run: Callable | None
+    uses_context: bool
+
+    @property
+    def function(self):
+        # Need to load function as lazy as possible to avoid loading if should_run
+        # defers.
+        _function = self._function
+        if type(_function) is not str:
+            return _function
+        else:
+            _function = from_identifier(_function)
+            self._function = _function
+            return _function
+
+
+class _Implentations(dict):
+    # A customized dict to lazy load some information from the implementation.
+    # Right now, this is just `should_run`, `function` should be later so that
+    # `should_run` could be light-weight if desired.
+    def __init__(self, _impl_infos):
+        self._impl_infos = _impl_infos
+
+    def __missing__(self, backend_name):
+        info = self._impl_infos.get(backend_name)
+        if info is None:
+            return None
+
+        should_run = info.get("should_run", None)
+        if should_run is not None:
+            should_run = from_identifier(should_run)
+
+        return _Implementation(
+            backend_name,
+            info["function"],
+            should_run,
+            info.get("uses_context", False),
+        )
 
 
 class Dispatchable:
@@ -690,32 +721,25 @@ class Dispatchable:
         self._relevant_args = relevant_args
 
         new_doc = []
-        self._implementations = {}
+        impl_infos = {}
         for backend in backend_system.backends.values():
             if backend.name == "default":
-                # The default is not stored on the backend, so explicitly
-                # create an Implementation for it.
-                impl = Implementation(
-                    backend, self._ident, None, False,
-                )
-                impl.function = self._default_func
-                self._implementations["default"] = impl
                 continue
 
             info = backend.functions.get(self._ident, None)
-
             if info is None:
-                # Backend does not implement this function.
-                continue
+                continue  # Backend does not implement this function.
 
-            self._implementations[backend.name] = Implementation(
-                backend, info["function"],
-                info.get("should_run", None),
-                info.get("uses_info", False),
-            )
+            impl_infos[backend.name] = info
 
             new_blurb = info.get("additional_docs", "No backend documentation available.")
             new_doc.append(f"{backend.name} :\n" + textwrap.indent(new_blurb, "    "))
+
+        # Create implementations, lazy loads should_run (and maybe more in the future).
+        self._implementations = _Implentations(impl_infos)
+        self._implementations["default"] = _Implementation(
+            "default", self._default_func, None, False,
+        )
 
         if not new_doc:
             new_doc = ["No backends found for this function."]
@@ -746,8 +770,9 @@ class Dispatchable:
 
     def __call__(self, *args, **kwargs):
         relevant_types = self._get_relevant_types(*args, **kwargs)
-        ordered_backends, type_, prioritized, trace = (
-            self._backend_system._dispatch_state.get())
+        state = self._backend_system._dispatch_state.get()
+        ordered_backends, type_, prioritized, trace = state
+
         if type_ is not None:
             relevant_types.add(type_)
         relevant_types = frozenset(relevant_types)
@@ -755,40 +780,36 @@ class Dispatchable:
         relevant_types, matching_backends = self._backend_system.get_types_and_backends(
             relevant_types, ordered_backends)
 
-        # TODO: If we ever anticipate a large number of backends that each only
-        #       support a small number of functions this is not ideal.
-        matching_impls = [
-            impl for name in matching_backends
-            if (impl := self._implementations.get(name)) is not None
-        ]
-    
         if trace is not None:
             call_trace = []
             trace.append((self._ident, call_trace))
         else:
             call_trace = None
 
-        for impl in matching_impls:
-            info = DispatchInfo(relevant_types, impl.backend.name in prioritized)
+        for name in matching_backends:
+            impl = self._implementations[name]  # not get, because we fill None also
+            if impl is None:
+                # Backend does not implement this function, in the future we
+                # may want to optimize this (in case many backends with few functions).
+                continue
 
-            if impl.should_run is NotFound:
-                impl.should_run = from_identifier(impl.should_run_symbol)
+            context = DispatchContext(relevant_types, state, name)
 
             # We use `is True` to possibly add information to the trace/log in the future.
-            if impl.should_run is None or impl.should_run(info, *args, **kwargs) is True:
-                if impl.function is NotFound:
-                    impl.function = from_identifier(impl.function_symbol)
-
+            should_run = impl.should_run
+            if should_run is None or should_run(context, *args, **kwargs) is True:
                 if call_trace is not None:
-                    call_trace.append((impl.backend.name, "called"))
+                    call_trace.append((name, "called"))
 
-                if impl.uses_info:
-                    return impl.function(info, *args, **kwargs)
+                if impl.uses_context:
+                    return impl.function(context, *args, **kwargs)
                 else:
                     return impl.function(*args, **kwargs)
+
             elif trace is not None and impl.should_run is not None:
-                call_trace.append((impl.backend.name, "deferred in should run"))
+                call_trace.append((name, "deferred in should run"))
 
         if call_trace is not None:
             call_trace.append(("default fallback", "called"))
+
         return self._default_func(*args, **kwargs)

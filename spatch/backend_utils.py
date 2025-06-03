@@ -9,7 +9,7 @@ class BackendFunctionInfo:
     func: Callable
     api_identity: str
     impl_identity: str
-    uses_info: bool
+    uses_context: bool
     should_run: Callable | None
     should_run_identity: str | None
 
@@ -31,7 +31,7 @@ class BackendImplementation:
         api_identity: str | Callable,
         *,
         should_run: str | Callable | None = None,
-        uses_info: bool = False,
+        uses_context: bool = False,
     ):
         """Mark function as an implementation of a dispatchable library function.
 
@@ -56,8 +56,8 @@ class BackendImplementation:
             doesn't return ``True``).
             (Any return value except ``True`` is considered falsy to allow the return
             to be used for diagnostics in the future.)
-        uses_info
-            Whether the function should be passed a ``DispatchInfo`` object
+        uses_context
+            Whether the function should be passed a ``DispatchContext`` object
             as first argument.
         """
         if callable(api_identity):
@@ -90,7 +90,7 @@ class BackendImplementation:
                 func,
                 api_identity,
                 impl_identity,
-                uses_info,
+                uses_context,
                 should_run,
                 should_run_ident,
             )
@@ -212,13 +212,13 @@ def update_entrypoint(
         info.api_identity: {
             "function": info.impl_identity,
             "should_run": info.should_run_identity,
-            "uses_info": info.uses_info,
+            "uses_context": info.uses_context,
             "additional_docs": format_docstring(info.func.__doc__),
         }
         for _, info in sorted(backend.api_to_info.items(), key=lambda item: item[0])
     }
     for func_info in functions.values():
-        for key in ["should_run", "additional_docs", "uses_info"]:
+        for key in ["should_run", "additional_docs", "uses_context"]:
             if not func_info[key]:
                 del func_info[key]
 

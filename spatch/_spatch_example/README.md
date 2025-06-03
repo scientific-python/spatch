@@ -48,8 +48,9 @@ with backend_opts(prioritize="backend1"):
     res = divide(1, 2)  # now uses backend1
     assert type(res) is int  # backend 1 is written to ensure this!
 
-# Similarly backend 2 supports floats, so we can prefer it over backend 1
-with backend_opts(prioritize="backend2"):
+# Similarly backend 2 supports floats, so we can prefer it over backend 1.
+# We can still also prioritize "backend1" if we want:
+with backend_opts(prioritize=["backend2", "backend1"]):
     divide(1., 2.)  # now uses backend2
 
 pprint.pprint(opts.trace[-2:])
