@@ -48,14 +48,14 @@ Entry-points allow us to do a few things:
 
 ### Use of identifier strings for everything
 
-We expect it to be common enough that users have an eviornment with backends
+We expect it to be common enough that users have an environment with backends
 installed but much of their code does not actually use them.
 In that use-case, it is vital to delay all expensive imports as much as possible.
 The string approach solves this: A backend can add `cupy` support, but if the user
 doesn't use `cupy` only the entry-point will ever be imported, and that is very
 light-weight.
 
-### Using `type=` to choose a dired type rather than the backend name
+### Using `type=` to choose a desired type rather than the backend name
 
 Spatch allows using `backend_opts(type=cupy.ndarray)` as a _type unsafe_ way for
 users to change behavior and ensuring a CuPy arrays are returned.
@@ -102,7 +102,7 @@ and this lead to a long tail of paper-cuts:
   to get the desired behavior.
 
 We firmly believe that teaching users about `cucim[cupy]` or some backend
-specific (unsafe) option is not signficantly easier than teaching them to use:
+specific (unsafe) option is not significantly easier than teaching them to use:
 * `with backend_opts(prioritize="cucim"):` for the safe first case and
 * `with backend_opts(type=cupy.ndarray):` for the unsafe second case.
   (May also include a `priority="cucim"` as well.)
@@ -125,7 +125,7 @@ to burden either `spatch` or the library with it.
 NetworkX for example did chose to do it and that is very much a valid choice.
 It even has mechanisms for caching such conversions.
 
-Spatch still allows backends to do conversions, but we ask the backendto take handle it.
+Spatch still allows backends to do conversions, but we ask the backend to handle it.
 The main downside is that if you wish to enable all functions for a specific type,
 you have to implement them all.
 Most of them could just be stubs that convert inputs, call the original function
@@ -164,25 +164,27 @@ meaning it probably can handle the inputs.
 The reason for this design is convenience, speed, and simplicity.
 
 Matching on types is the only truly fast thing, because it allows a design
-of where we can decide which backend to call is just:
-1. Fetching the current dispatching state (very fast,  we must see if the
-   user made any configuration).  This is always needed.
+where the decision of which backend to call is done by:
+1. Fetching the current dispatching state. This is very fast, but unavoidable
+   as we must check user configuration.
 2. Figuring out which (unique) types the user passed to do type dispatching.
-3. Doing a single cache lookup for the two pieces of information above,
-   because this won't be the first time these types are used.
+3. Doing a single cache lookup using these two pieces of information above.
 
-Users will use a small set of unique types (we _can_ rely on that) so caching
-works great.
-Now consider a world _without_ type based matching step 2. will be repeated
-by possibly `N` backends and we can expect _each_ of them to be slower then `spatch`
-is to do all of these three steps.
+Users will use a small set of unique types and configurations so caching works great.
+Now consider a world _without_ type based matching.
+Step 2. needs to be repeated by possibly `N` backends and we can expect _each_
+of them to be slower then `spatch` needs to do all three steps.
 (We may ask multiple backends even if we never use any backend at all.)
+Additionally, by enforcing the use of types we avoid any temptation by backends
+to, intentionally or not, do expensive checks to see whether they "match".
 
-The above explains why `spatch` insists on using types as much as possible.
+Caching, type-safety, and no accidentally slow behavior explains why
+`spatch` insists on using types as much as possible.
+
 However, we could still ask each backend to provide a `matches(types)` function
 rather than asking them to list primary and secondary types.
-This is just for convenience.  Since we insist on types we might as well handle
-the necessary complexity in `spatch`.
+This choice is just for convenience right now.  Since we insist on types we might
+as well handle the these things inside `spatch`.
 
 The reason for "primary" and "secondary" type is to make backends simple if
 they might get multiple inputs. For example, a backend that has `cupy.ndarray`
@@ -191,6 +193,26 @@ about which type to return.
 It may also allow us to match more precisely, although the backend priority order
 could probably ensure to call the right backend first.
 And if you just want a single type, then ignore the "secondary" one...
+
+### How would I create for example an "Array API" backend?
+
+This is actually not a problem at all.  But the backend will have to provide
+an abstract base class and make sure it is importable in a very light-weight way:
+```python
+class SupportsArrayAPI(abc.ABC):
+    @classmethod
+    def __subclasshook__(cls, C):
+        return hasattr(C, "__array_nanespace__")
+```
+Then you can use `"@mymodule:SupportsArrayAPI"` _almost_ like the normal use.
+
+```{admonition} Future support
+We don't support this as of writing.  It requires proper support for subclasses and
+abstract classes and to use abstract classes we must import them.
+We imagine using e.g. `~` as a marker for subclasses and `@` as a marker for abstract
+classes and we wuold probably always import abstract classes immediately.
+(This information is also relevant for finding the backend priority order.)
+```
 
 ### Why not use magic dunders (like NumPy, NetworkX, or Array API)?
 
@@ -223,16 +245,16 @@ can dispatch to a function that uses the Array API.
 Context managers are safe way to manage options for users at runtime.
 This is _not_ strictly needed for type dispatching, because we could just
 choose the right version implicitly based on what the user passed.
-(Although there are reasons where you may want it, see below.)
 
 But it is needed for backend selection. There could be a fast, but imprecise,
 backend and the user should possibly use it only for a specific part of their
 code.
-Context managers serve this use-case very nicely.
+
+Context managers simply serve this use-case nicely, quickly, and locally.
 
 #### Why not a namespace for explicit dispatching?
 
-Based off NEP 37, the Array API for example dispatches once and then the user has an
+Based on ideas from NEP 37, the Array API for example dispatches once and then the user has an
 `xp` namespace they can pass around.  That is great!
 
 But it is not targeted to end-users.  An end-users should write:
@@ -245,20 +267,22 @@ libx = library.dispatch(cupy_array)
 libx.function(cupy_array)
 ```
 The second is very explicit and allows to explicitly pass around a "dispatched" state
-(i.e. the `libx` namespace).  This is can be amazing to write a function that takes
-wants to work with different inputs because just using `libx` you don't have to worry
-about anything and you can pass it around.
+(i.e. the `libx` namespace).  This is can be amazing to write a function that
+wants to work with different inputs because by using `libx` you don't have to worry
+about anything and you can even pass it around.
 
 So we love this concept!  But we think that the first "end-user" style use-case has to
-be center stage.  For the core library (i.e. NumPy vs. CuPy) the explicit library
+be center stage for `spatch`.
+For the core libraries (i.e. NumPy vs. CuPy) the explicit library
 use-case seems just far more relevant.  We think the reason for this are:
 * It is just simpler there, since there no risk of having multiple such contexts.
 * Backend selection is not a thing, if it was NumPy or CuPy should naturally handle it
-  themselves.  (This refers to backend selection for speed, not type dispatching.
+  themselves.
+  (Tis refers to backend selection for speed, not type dispatching.
   NumPy _does_ type dispatch to cupy and while unsafe, it would not be unfathomable
-  to ask NumPy to dispatch even creation function within a context!)
-* User need:  It is much more practical for end-users to use cupy or do `import cupy as np`
-  then it is to additionally modify all libraries as well.
+  to ask NumPy to dispatch even creation function within a context.)
+* User need:  It seems much more practical for end-users to just use cupy maybe via
+  `import cupy as np` then it is to also modify many library imports.
 
 ```{admonition} Future note
 `spatch` endevors to provide a more explicit path (and if this gets outdated, maybe we do).
@@ -325,8 +349,8 @@ We don't mind changing these at all.  There are three because:
   It is named "block" just because "disable" also makes sense at runtime.
 * `_PRIORITIZE` is there as the main user API.
 * `_SET_ORDER` is fine grained to prioritize one backend over another.
-  at runtime, this seemed less important (you can also manage via
-  introspection).  This mainly exists because if backend ordering is
-  buggy, we tell users to set this to avoid the issue.
+  At runtime this seemed less important (can be done via introspection).
+  This largely exists because if backend ordering is buggy,
+  we tell users to set this to work around the issue.
 
 But of course there could be more or different ones.

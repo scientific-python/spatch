@@ -1,7 +1,7 @@
 # spatch documentation
 
 Spatch is a dispatching tool with a focus on scientific python libraries.
-This documentation provides an overview for user, librarie, and backend
+This documentation provides an overview of user, library, and backend
 features.
 Users of libraries that integrate spatch should usually refer to the library
 and/or backend documentation.

@@ -18,7 +18,8 @@ can be run to generate their `functions` context (i.e. if you add more functions
 
 For users we have the following basic capabilities.  Starting with normal
 type dispatching:
-```
+
+```python
 import pprint
 from spatch._spatch_example.library import divide, backend_opts
 
@@ -41,7 +42,7 @@ if you wanted to do this globally you can use `backend_opts().__enter__()`.
 
 The first thing is to prioritize the use of a backend over another (possibly
 including the default implementation):
-```
+```python
 # Backend 1 also has integers as a primary type, so we can prefer
 # it over the default implementation for integer inputs as well:
 with backend_opts(prioritize="backend1"):
@@ -76,7 +77,7 @@ In the array world there use-cases that are not covered in the above:
 
 This is supported, but requires indicating the _type_ preference and users
 must be aware that this can even easier break their or third party code:
-```
+```python
 with backend_opts(type=float):
     res = divide(1, 2)  # we use backend 1 and it returns floats!
     assert type(res) is float

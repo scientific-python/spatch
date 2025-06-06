@@ -18,7 +18,7 @@ separate for the user (and library/backend authors).
 ## Type dispatching
 
 Many libraries are written for NumPy, but users may wish to use them
-with other types, for exmple because code needs to scale from an experiment
+with other types, for example because code needs to scale from an experiment
 to a large scale deployment.
 
 Unfortunately, providing code for a host of such types isn't easy
@@ -58,7 +58,7 @@ cases those modifications may be small (maybe it is really only faster).
 For the user, backend _selection_ often means that they should explicitly
 select prefer a backend (e.g. over the default implementation).
 This could be for example via a context manager:
-```
+```python
 with backend_opts(prioritize="gpu_backend"):
     library.function()  # now running on the GPU
 ```
