@@ -12,6 +12,7 @@ and/or backend documentation.
 Overview <overview.md>
 Minimal usage example <EXAMPLE_README.md>
 API Reference <api/index.rst>
+Design choices <design_choices.md>
 ```
 
 ## Indices and tables

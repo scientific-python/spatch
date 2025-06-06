@@ -40,4 +40,4 @@ definition.
 .. autoclass:: spatch.backend_utils.BackendImplementation
     :members: implements, set_should_run
 
-.. autoclass:: spatch.backend_system.DispatchInfo
+.. autoclass:: spatch.backend_system.DispatchContext
