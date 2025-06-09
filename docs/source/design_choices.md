@@ -206,14 +206,6 @@ class SupportsArrayAPI(abc.ABC):
 ```
 Then you can use `"@mymodule:SupportsArrayAPI"` _almost_ like the normal use.
 
-```{admonition} Future support
-We don't support this as of writing.  It requires proper support for subclasses and
-abstract classes and to use abstract classes we must import them.
-We imagine using e.g. `~` as a marker for subclasses and `@` as a marker for abstract
-classes and we wuold probably always import abstract classes immediately.
-(This information is also relevant for finding the backend priority order.)
-```
-
 ### Why not use magic dunders (like NumPy, NetworkX, or Array API)?
 
 Magic dunders (`__double_underscore_method__`) are a great way to implement

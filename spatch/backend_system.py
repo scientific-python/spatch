@@ -11,6 +11,7 @@ from types import MethodType
 from typing import Callable
 
 from spatch import from_identifier, get_identifier
+from spatch.utils import TypeIdentifier
 
 
 class Backend:
@@ -19,8 +20,8 @@ class Backend:
         self = cls()
         self.name = "default"
         self.functions = None
-        self.primary_types = frozenset(primary_types)
-        self.secondary_types = frozenset()
+        self.primary_types = TypeIdentifier(primary_types)
+        self.secondary_types = TypeIdentifier([])
         self.supported_types = self.primary_types
         self.known_backends = frozenset()
         self.prioritize_over_backends = frozenset()
@@ -34,17 +35,18 @@ class Backend:
             raise ValueError("Invalid backend name {self.name!r}, must be a valid identifier.")
         self.functions = info.functions
 
-        self.primary_types = frozenset(info.primary_types)
-        self.secondary_types = frozenset(info.secondary_types)
+        self.primary_types = TypeIdentifier(info.primary_types)
+        self.secondary_types = TypeIdentifier(info.secondary_types)
         self.supported_types = self.primary_types | self.secondary_types
+
         self.known_backends = frozenset(getattr(info, "known_backends", []))
         self.prioritize_over_backends = frozenset(getattr(info, "prioritize_over_backends", []))
         return self
 
     def known_type(self, relevant_type):
-        if get_identifier(relevant_type) in self.primary_types:
+        if relevant_type in self.primary_types:
             return "primary"  # TODO: maybe make it an enum?
-        elif get_identifier(relevant_type) in self.secondary_types:
+        elif relevant_type in self.secondary_types:
             return "secondary"
         else:
             return False
@@ -56,16 +58,17 @@ class Backend:
         return False
 
     def compare_with_other(self, other):
+        # NOTE: This function is a symmetric comparison
         if other.name in self.prioritize_over_backends:
             return 2
 
         # If our primary types are a subset of the other, we match more
-        # precisely/specifically.
-        # TODO: Think briefly whether secondary types should be considered
-        if self.primary_types.issubset(other.primary_types | other.secondary_types):
+        # precisely/specifically. In theory we could also distinguish whether
+        # the other has it as a primary or secondary type, but we do not.
+        if other.supported_types.encompasses(self.primary_types):
             return 1
-        elif other.primary_types.issubset(self.primary_types | self.secondary_types):
-            return -1
+        if other.primary_types.encompasses(self.primary_types, subclasscheck=True):
+            return 1
 
         return NotImplemented  # unknown order (must check other)
 
@@ -84,15 +87,20 @@ def compare_backends(backend1, backend2, prioritize_over):
     cmp2 = backend2.compare_with_other(backend1)
     if cmp1 is NotImplemented and cmp2 is NotImplemented:
         return 0
+    elif cmp1 is NotImplemented:
+        return -cmp2
+    elif cmp2 is NotImplemented:
+        return cmp1
 
     if cmp1 == cmp2:
         raise RuntimeError(
             "Backends {backend1.name} and {backend2.name} report inconsistent "
             "priorities (this means they are buggy).  You can manually set "
             "a priority or remove one of the backends.")
-    if cmp1 != 0:
+    if cmp1 > cmp2:
         return cmp1
-    return -cmp2
+    else:
+        return -cmp2
 
 
 def _modified_state(
@@ -469,10 +477,14 @@ class BackendSystem:
                 )
 
         # The topological sorter uses insertion sort, so sort backend names
-        # alphabetically first.  But ensure that we put default first.
+        # alphabetically first to ensure a stable order.
         backends = sorted(b for b in self.backends)
+        # Then, make sure that the "default" comes first, then non-abstract matching ones.
+        # Backends matching abstracts ones must be assumed to match very broadly.
         graph = {"default": set()}
-        graph.update({b: set() for b in backends})
+        graph.update({b: set() for b in backends if not self.backends[b].primary_types.is_abstract})
+        graph.update({b: set() for b in backends if self.backends[b].primary_types.is_abstract})
+
         for i, n_b1 in enumerate(backends):
             for n_b2 in backends[i+1:]:
                 cmp = compare_backends(self.backends[n_b1], self.backends[n_b2], prioritize_over)
