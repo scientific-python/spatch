@@ -48,11 +48,13 @@ At least for arrays, subclasses commonly change behavior in large ways
 (breaking Liskov substitution principle), so functions may not behave
 correctly for them anyway.
 However, we do support the following, e.g.:
+
 - ``"numpy:ndarray"`` to match NumPy arrays exactly
 - ``"~numpy:ndarray"`` to match any subclass of NumPy arrays
 - ``"@module:qualname"`` to match any subclass of an abstract base class
 
 If you use an abstract base class, note that you must take a lot of care:
+
 - The abstract base class must be cheap to import, because we cannot avoid
   importing it.
 - Since we can't import all classes, ``spatch`` has no ability to order abstract
