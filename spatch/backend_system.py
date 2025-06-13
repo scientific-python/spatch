@@ -1,5 +1,6 @@
 import contextlib
 import contextvars
+import dataclasses
 from dataclasses import dataclass
 import functools
 import graphlib
@@ -11,37 +12,41 @@ from types import MethodType
 from typing import Callable
 
 from spatch import from_identifier, get_identifier
-from spatch.utils import TypeIdentifier
+from spatch.utils import TypeIdentifier, valid_backend_name
 
 
+@dataclass(slots=True)
 class Backend:
-    @classmethod
-    def default_backend(cls, primary_types):
-        self = cls()
-        self.name = "default"
-        self.functions = None
-        self.primary_types = TypeIdentifier(primary_types)
-        self.secondary_types = TypeIdentifier([])
-        self.supported_types = self.primary_types
-        self.known_backends = frozenset()
-        self.prioritize_over_backends = frozenset()
-        return self
+    name: str
+    primary_types: TypeIdentifier = TypeIdentifier([])
+    secondary_types: TypeIdentifier = TypeIdentifier([])
+    functions : dict = dataclasses.field(default_factory=dict)
+    known_backends: frozenset = frozenset()
+    prioritize_above: frozenset = frozenset()
+    prioritize_below: frozenset = frozenset()
+    requires_opt_in: bool = False
+    supported_types: TypeIdentifier = dataclasses.field(init=False)
+
+    def __post_init__(self):
+        if not valid_backend_name(self.name):
+            raise ValueError("Invalid backend name {self.name!r}, must be a valid identifier.")
+
+        if len(self.primary_types.identifiers) == 0:
+            raise ValueError("A backend must have at least one primary type.")
+
+        self.supported_types = self.primary_types | self.secondary_types
 
     @classmethod
     def from_namespace(cls, info):
-        self = cls()
-        self.name = info.name
-        if not self.name.isidentifier():
-            raise ValueError("Invalid backend name {self.name!r}, must be a valid identifier.")
-        self.functions = info.functions
-
-        self.primary_types = TypeIdentifier(info.primary_types)
-        self.secondary_types = TypeIdentifier(info.secondary_types)
-        self.supported_types = self.primary_types | self.secondary_types
-
-        self.known_backends = frozenset(getattr(info, "known_backends", []))
-        self.prioritize_over_backends = frozenset(getattr(info, "prioritize_over_backends", []))
-        return self
+        return cls(
+            name=info.name,
+            primary_types=TypeIdentifier(info.primary_types),
+            secondary_types=TypeIdentifier(info.secondary_types),
+            functions=info.functions,
+            prioritize_above=frozenset(getattr(info, "prioritize_above", [])),
+            prioritize_below=frozenset(getattr(info, "prioritize_below", [])),
+            requires_opt_in=info.requires_opt_in,
+        )
 
     def known_type(self, relevant_type):
         if relevant_type in self.primary_types:
@@ -59,8 +64,10 @@ class Backend:
 
     def compare_with_other(self, other):
         # NOTE: This function is a symmetric comparison
-        if other.name in self.prioritize_over_backends:
+        if other.name in self.prioritize_above:
             return 2
+        elif other.name in self.prioritize_below:
+            return -2
 
         # If our primary types are a subset of the other, we match more
         # precisely/specifically. In theory we could also distinguish whether
@@ -286,6 +293,18 @@ class BackendOpts:
         self.backends, self.prioritized, self.type, self.trace = self._state
         self._token = None
 
+    def __repr__(self):
+        # We could allow a repr that can be copy pasted, but this seems more clear?
+        inactive = tuple(b for b in self._backend_system.backends if b not in self.backends)
+        type_str = "    type: {tuple(self.type)[0]!r}\n" if self.type else ""
+        return (f"<Backend options:\n"
+                f"   active: {self.backends}\n"
+                f"   inactive: {inactive}\n"
+                f"{type_str}"
+                f"   tracing: {self.trace is not None}\n"
+                f">"
+            )
+
     def enable_globally(self):
         """Apply these backend options globally.
 
@@ -366,7 +385,7 @@ class BackendOpts:
 
 
 class BackendSystem:
-    def __init__(self, group, environ_prefix, default_primary_types=()):
+    def __init__(self, group, environ_prefix, default_primary_types=None):
         """Create a backend system that provides a @dispatchable decorator.
 
         The backend system also has provides the ``backend_opts`` context manager
@@ -389,17 +408,18 @@ class BackendSystem:
             - ``f"{environ_prefix}_PRIORITIZE"``
             - ``f"{environ_prefix}_BLOCK"``
 
-        default_primary_types : frozenset
+        default_primary_types : frozenset or None
             The set of types that are considered primary by default.  Types listed
             here must be added as "secondary" types to backends if they wish
             to support them.
+            If not provided, a "default" backend is not created!
         """
-        # TODO: We could define types of the fallback here, or known "scalar"
-        #       (i.e. unimportant types).
-        #       In a sense, the fallback should maybe itself just be a normal
-        #       backend, except we always try it if all else fails...
-        self.backends = {"default": Backend.default_backend(default_primary_types)}
-        self._default_primary_types = frozenset(default_primary_types)
+        self.backends = {}
+        if default_primary_types is not None:
+            self.backends["default"] = Backend(
+                name="default",
+                primary_types=TypeIdentifier(default_primary_types)
+            )
 
         try:
             set_order = os.environ.get(f"{environ_prefix}_SET_ORDER", "").split(",")
@@ -415,7 +435,7 @@ class BackendSystem:
                         f"    {orders_str}")
                 prev_b = None
                 for b in orders:
-                    if not b.isidentifier():
+                    if not valid_backend_name(b):
                         raise ValueError(
                             f"Name {b!r} in {environ_prefix}_SET_ORDER is not a valid backend name.")
                     if prev_b is not None:
@@ -436,7 +456,7 @@ class BackendSystem:
             prioritize = os.environ.get(f"{environ_prefix}_PRIORITIZE", "").split(",")
             prioritize = [_ for _ in prioritize if _]  # ignore empty chunks
             for b in prioritize:
-                if not b.isidentifier():
+                if not valid_backend_name(b):
                     raise ValueError(
                         f"Name {b!r} in {environ_prefix}_PRIORITIZE is not a valid backend name.")
         except Exception as e:
@@ -511,16 +531,14 @@ class BackendSystem:
         # The state is the ordered (active) backends and the prefered type (None)
         # and the trace (None as not tracing).
         base_state = (order, None, frozenset(), None)
+        disable = {b.name for b in self.backends.values() if b.requires_opt_in}
         state = _modified_state(
-            self, base_state, prioritize=prioritize, unknown_backends="ignore")
+            self, base_state, prioritize=prioritize, disable=disable, unknown_backends="ignore")
         self._dispatch_state = contextvars.ContextVar(
             f"{group}.dispatch_state", default=state)
 
     @functools.lru_cache(maxsize=128)
     def known_type(self, relevant_type, primary=False):
-        if get_identifier(relevant_type) in self._default_primary_types:
-            return True
-
         for backend in self.backends.values():
             if backend.known_type(relevant_type):
                 return True
@@ -799,10 +817,10 @@ class Dispatchable:
             call_trace = None
 
         for name in matching_backends:
-            impl = self._implementations[name]  # not get, because we fill None also
+            impl = self._implementations[name]
             if impl is None:
                 # Backend does not implement this function, in the future we
-                # may want to optimize this (in case many backends with few functions).
+                # may want to optimize this (in case many backends have few functions).
                 continue
 
             context = DispatchContext(relevant_types, state, name)

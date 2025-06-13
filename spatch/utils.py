@@ -1,5 +1,6 @@
 from importlib import import_module
 from dataclasses import dataclass, field
+import re
 import sys
 
 
@@ -14,6 +15,18 @@ def from_identifier(ident):
     for name in qualname.split("."):
         obj = getattr(obj, name)
     return obj
+
+
+# Valid recommended entry point name, but we could allow more, see:
+# https://packaging.python.org/en/latest/specifications/entry-points/#data-model
+_VALID_NAME_RE = re.compile(r"[\w.-]+")
+
+
+def valid_backend_name(name):
+    """Check that name is a valid backend name based on what is recommended
+    for entry point names.
+    """
+    return _VALID_NAME_RE.fullmatch(name) is not None
 
 
 @dataclass(slots=True)

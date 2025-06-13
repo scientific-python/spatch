@@ -14,5 +14,6 @@ backend_opts = _backend_system.backend_opts
 def divide(x, y):
     """Divide integers, other types may be supported via backends"""
     if not isinstance(x, int) or not isinstance(y, int):
-        raise TypeError("x must be an integer")
+        # We could allow context being passed in to do this check.
+        raise TypeError("x and y must be an integer")
     return x // y

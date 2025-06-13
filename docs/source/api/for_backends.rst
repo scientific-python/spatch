@@ -43,7 +43,7 @@ the entry-point.
 As everything, they are identified by ``"__module__:__qualname__"`` strings,
 for example ``"numpy:ndarray"``.
 
-We suggest that backends at least initially stick to exact type matches.
+We suggest that backends to initially use exact type matches.
 At least for arrays, subclasses commonly change behavior in large ways
 (breaking Liskov substitution principle), so functions may not behave
 correctly for them anyway.
@@ -60,6 +60,31 @@ If you use an abstract base class, note that you must take a lot of care:
 - Since we can't import all classes, ``spatch`` has no ability to order abstract
   classes correctly (but we order them last if a primary type, which is typically right).
 - ``spatch`` will not guarantee correct behavior if an ABC is mutated at runtime.
+
+### ``requires_opt_in``
+
+A boolean indicating whether your backend should be active by default.
+Typically, set this to ``True`` for a type dispatching backend and ``False`` otherwise.
+A backend doing both needs to set it to ``True``, and must use ``should_run`` with
+a ``context`` to disambiguate.
+
+Based on library guidance and feedback a non-type dispatching backend may also
+set this to ``True`` if it's behavior matches the library behavior closely.
+
+.. warning::
+   **Always** check with library guidelines or reach out to authors before setting
+   this to ``True``.
+
+   The golden rule is that behavior must be the same if your backend is
+   installed but nothing else changes.
+
+   And remember that *identical* is typically impossible in numerical computing.
+   So always check with the library (or other backends) authors first what they
+   consider to be an acceptable difference.
+
+   Failure to do this, will just mean that ``spatch`` needs a way to block backends
+   or only allow specific ones, and then everyone loses...
+
 
 ### functions
 
@@ -83,25 +108,10 @@ The following fields are supported for each function:
 ``spatch`` tries to order backends based on the types,
 but this cannot get the order right always.
 Thus, you can manually prioritize your backend over others by defining
-for example ``prioritize_over_backends = ["default"]``.
+for example ``prioritize_above = ["default"]`` or ``prioritize_below = ["default"]``.
 
-.. warning::
-   **Always** ask for permission before prioritizing your backend!
-   (Unless it is clearly to fix a case where ``spatch`` gets the order wrong.)
-
-   The golden rule is that behavior must be the same if your backend is
-   installed but nothing else changes.
-
-   And remember that *identical* is typically impossible in numerical computing.
-   So always check with the library (or other backends) authors first what they
-   consider to be an acceptable difference.
-
-   Failure to do this, will just mean that ``spatch`` needs a way to block backends
-   or only allow specific ones, and then everyone loses...
-
-.. note::
-  We may need both directions, not only "prioritize me" (maybe the other is actually
-  more important).
+It is your responsibility to ensure that these prioritizations make sense and
+are acceptable to other backends.
 
 ### More?
 
