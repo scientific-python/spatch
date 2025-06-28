@@ -22,8 +22,8 @@ class Backend:
     secondary_types: TypeIdentifier = TypeIdentifier([])
     functions : dict = dataclasses.field(default_factory=dict)
     known_backends: frozenset = frozenset()
-    prioritize_above: frozenset = frozenset()
-    prioritize_below: frozenset = frozenset()
+    higher_priority_than: frozenset = frozenset()
+    lower_priority_than: frozenset = frozenset()
     requires_opt_in: bool = False
     supported_types: TypeIdentifier = dataclasses.field(init=False)
 
@@ -43,8 +43,8 @@ class Backend:
             primary_types=TypeIdentifier(info.primary_types),
             secondary_types=TypeIdentifier(info.secondary_types),
             functions=info.functions,
-            prioritize_above=frozenset(getattr(info, "prioritize_above", [])),
-            prioritize_below=frozenset(getattr(info, "prioritize_below", [])),
+            higher_priority_than=frozenset(getattr(info, "higher_priority_than", [])),
+            lower_priority_than=frozenset(getattr(info, "lower_priority_than", [])),
             requires_opt_in=info.requires_opt_in,
         )
 
@@ -64,9 +64,9 @@ class Backend:
 
     def compare_with_other(self, other):
         # NOTE: This function is a symmetric comparison
-        if other.name in self.prioritize_above:
+        if other.name in self.higher_priority_than:
             return 2
-        elif other.name in self.prioritize_below:
+        elif other.name in self.lower_priority_than:
             return -2
 
         # If our primary types are a subset of the other, we match more

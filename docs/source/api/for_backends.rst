@@ -108,7 +108,8 @@ The following fields are supported for each function:
 ``spatch`` tries to order backends based on the types,
 but this cannot get the order right always.
 Thus, you can manually prioritize your backend over others by defining
-for example ``prioritize_above = ["default"]`` or ``prioritize_below = ["default"]``.
+for example ``higher_priority_than = ["default"]`` or
+``lower_priority_than = ["default"]``.
 
 It is your responsibility to ensure that these prioritizations make sense and
 are acceptable to other backends.

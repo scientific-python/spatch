@@ -1,7 +1,7 @@
 name = "backend1"
 # This backend wants to work with floats, but explicitly also supports ints.
 # By default it will not be used (int is the default primary type). But it
-# can be prioritized or could use `prioritize_above = ["default"]`.
+# can be prioritized or could use `higher_priority_than = ["default"]`.
 primary_types = ["builtins:float", "builtins:int"]
 secondary_types = []
 requires_opt_in = False
@@ -20,7 +20,7 @@ functions = {
 
 # TODO: The documentation has to tell people not to create circles.
 # and that includes with the types?!
-# prioritize_above = ["default"]
+# higher_priority_than = ["default"]
 
 if __name__ == "__main__":
     # Run this file as a script to update this file
