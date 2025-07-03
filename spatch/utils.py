@@ -47,7 +47,11 @@ class _TypeInfo:
             self.is_abstract = True
             self.identifier = self.identifier[1:]
 
-        self.module, self.qualname = self.identifier.rsplit(":")
+        try:
+            self.module, self.qualname = self.identifier.rsplit(":")
+        except ValueError as e:
+            # Try to be slightly more helpful and print the bad identifier.
+            raise ValueError(f"Invalid type identifier {self.identifier!r}") from e
 
     def matches(self, type):
         if type.__module__ == self.module and type.__qualname__ == self.qualname:
@@ -56,7 +60,7 @@ class _TypeInfo:
         if not self.allow_subclasses:
             return False
 
-        if not self.is_abstract and self.modules not in sys.modules:
+        if not self.is_abstract and self.module not in sys.modules:
             # If this isn't an abstract type there can't be sublasses unless
             # the module was already imported.
             return False
@@ -115,7 +119,7 @@ class TypeIdentifier:
                 # subclasses of this.
                 any_subclass = False
                 for self_ti, other_ti in zip(self._type_infos, other._type_infos):
-                    if self_ti.allow_subclasses == ti2.allow_subclasses:
+                    if self_ti.allow_subclasses == other_ti.allow_subclasses:
                         continue
                     if self_ti.allow_subclasses and not other_ti.allow_subclasses:
                         any_subclass = True

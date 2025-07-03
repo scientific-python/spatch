@@ -3,7 +3,6 @@ import contextvars
 import dataclasses
 from dataclasses import dataclass
 import functools
-import graphlib
 import os
 import importlib_metadata
 import warnings
@@ -325,7 +324,7 @@ class BackendOpts:
             warnings.warn(
                 "Backend options were previously modified, global change of the "
                 "backends state should only be done once from the main program.",
-                UserWarning,
+                UserWarning, 2
             )
         self._token = self._dispatch_state.set(self._state)
 
@@ -385,7 +384,7 @@ class BackendOpts:
 
 
 class BackendSystem:
-    def __init__(self, group, environ_prefix, default_primary_types=None):
+    def __init__(self, group, environ_prefix, default_primary_types=None, backends=None):
         """Create a backend system that provides a @dispatchable decorator.
 
         The backend system also has provides the ``backend_opts`` context manager
@@ -397,9 +396,10 @@ class BackendSystem:
 
         Parameters
         ----------
-        group : str
+        group : str or None
             The group of the backend entry points.  All backends are entry points
             that are immediately loaded.
+            If None, no entry points will be loaded (this is mainly for testing).
         environ_prefix : str
             Prefix for environment variables to modify the dispatching behavior.
             ``spatch`` currently queries the following variables (see :ref:`for_users`).
@@ -413,6 +413,12 @@ class BackendSystem:
             here must be added as "secondary" types to backends if they wish
             to support them.
             If not provided, a "default" backend is not created!
+
+        backends : sequence of backend namespaces
+            Register a set of backends explicitly.  This exists largely for testing
+            but may be used for a library to add internal backends.
+            (The order of backends passed is used and should be consistent between runs.)
+
         """
         self.backends = {}
         if default_primary_types is not None:
@@ -449,7 +455,7 @@ class BackendSystem:
             warnings.warn(
                 f"Ignoring invalid environment variable {environ_prefix}_SET_ORDER "
                 f"due to error: {e}",
-                UserWarning,
+                UserWarning, 2
             )
 
         try:
@@ -463,7 +469,7 @@ class BackendSystem:
             warnings.warn(
                 f"Ignoring invalid environment variable {environ_prefix}_PRIORITIZE "
                 f"due to error: {e}",
-                UserWarning,
+                UserWarning, 2
             )
 
         try:
@@ -477,54 +483,42 @@ class BackendSystem:
             warnings.warn(
                 f"Ignoring invalid environment variable {environ_prefix}_SET_ORDER "
                 f"due to error: {e}",
-                UserWarning,
+                UserWarning, 2
             )
 
-        eps = importlib_metadata.entry_points(group=group)
-        for ep in eps:
-            if ep.name in blocked:
-                continue
+        # Note that the order of adding backends matters, we add `backends` first
+        # and then entry point ones in alphabetical order.
+        backends = list(backends) if backends is not None else []
+        backends = backends + self._get_entry_points(group, blocked)
+        for backend in backends:
+            if backend.name in blocked:
+                continue  # also skip explicitly added ones (even "default")
             try:
-                namespace = ep.load()
-                if ep.name != namespace.name:
-                    raise RuntimeError(
-                        f"Entrypoint name {ep.name!r} and actual name {namespace.name!r} mismatch.")
-                self.backend_from_namespace(ep.load())
+                self.backend_from_namespace(backend)
             except Exception as e:
                 warnings.warn(
-                    f"Not loading invalid backend {ep.name} due to error: {e}",
-                    UserWarning,
+                    f"Skipping backend {backend.name} due to error: {e}",
+                    UserWarning, 2
                 )
 
-        # The topological sorter uses insertion sort, so sort backend names
-        # alphabetically first to ensure a stable order.
-        backends = sorted(b for b in self.backends)
-        # Then, make sure that the "default" comes first, then non-abstract matching ones.
-        # Backends matching abstracts ones must be assumed to match very broadly.
-        graph = {"default": set()}
-        graph.update({b: set() for b in backends if not self.backends[b].primary_types.is_abstract})
-        graph.update({b: set() for b in backends if self.backends[b].primary_types.is_abstract})
+        # Create a directed graph for which backends have a known higher priority than others.
+        # The topological sorter is stable with respect to the original order, so we add
+        # the "default" first and then other backends in order.  The one additional step is that
+        # non-abstract matching backends are always ordered before abstract ones.
+        graph = {"default": []}
+        graph.update({n: [] for n, b in self.backends.items() if not b.primary_types.is_abstract})
+        graph.update({n: [] for n, b in self.backends.items() if b.primary_types.is_abstract})
 
-        for i, n_b1 in enumerate(backends):
-            for n_b2 in backends[i+1:]:
-                cmp = compare_backends(self.backends[n_b1], self.backends[n_b2], prioritize_over)
+        backends = [self.backends[n] for n in graph]
+        for i, b1 in enumerate(backends):
+            for b2 in backends[i+1:]:
+                cmp = compare_backends(b1, b2, prioritize_over)
                 if cmp < 0:
-                    graph[n_b1].add(n_b2)
+                    graph[b1.name].append(b2.name)
                 elif cmp > 0:
-                    graph[n_b2].add(n_b1)
+                    graph[b2.name].append(b1.name)
 
-        ts = graphlib.TopologicalSorter(graph)
-        try:
-            order = tuple(ts.static_order())
-        except graphlib.CycleError as e:
-            cycle = e.args[1]
-            raise RuntimeError(
-                f"Backends form a priority cycle.  This is a bug in a backend or your\n"
-                f"environment settings. Check the environment variable {environ_prefix}_SET_ORDER\n"
-                f"and change it for example to:\n"
-                f"    {environ_prefix}_SET_ORDER=\"{cycle[-1]}>{cycle[-2]}\"\n"
-                f"to break the offending cycle:\n"
-                f"    {'>'.join(cycle)}") from None
+        order = self._toposort(graph)
 
         # Finalize backends to be a dict sorted by priority.
         self.backends = {b: self.backends[b] for b in order}
@@ -536,6 +530,65 @@ class BackendSystem:
             self, base_state, prioritize=prioritize, disable=disable, unknown_backends="ignore")
         self._dispatch_state = contextvars.ContextVar(
             f"{group}.dispatch_state", default=state)
+
+    @staticmethod
+    def _toposort(graph):
+        # Adapted from Wikipedia's depth-first pseudocode. We are not using graphlib,
+        # because it doesn't preserve the original order correctly.
+        # This depth-first approach does preserve it.
+        def visit(node, order, _visiting={}):
+            if node in order:
+                return
+            if node in _visiting:
+                cycle = (tuple(_visiting.keys()) + (node,))[::-1]
+                raise RuntimeError(
+                    f"Backends form a priority cycle.  This is a bug in a backend or your\n"
+                    f"environment settings. Check the environment variable {environ_prefix}_SET_ORDER\n"
+                    f"and change it for example to:\n"
+                    f"    {environ_prefix}_SET_ORDER=\"{cycle[-1]}>{cycle[-2]}\"\n"
+                    f"to break the offending cycle:\n"
+                    f"    {'>'.join(cycle)}") from None
+
+            _visiting[node] = None  # mark as visiting/in-progress
+            for n in graph[node]:
+                visit(n, order, _visiting)
+
+            del _visiting[node]
+            order[node] = None  # add sorted node
+
+        to_sort = list(graph.keys())
+        order = {}  # dict as a sorted set
+        for n in list(graph.keys()):
+            visit(n, order)
+
+        return tuple(order.keys())
+
+    @staticmethod
+    def _get_entry_points(group, blocked):
+        """Get backends from entry points.  Result is sorted alphabetically
+        to ensure a stable order.
+        """
+        if group is None:
+            return []
+
+        backends = []
+        eps = importlib_metadata.entry_points(group=group)
+        for ep in eps:
+            if ep.name in blocked:
+                continue
+            try:
+                namespace = ep.load()
+                if ep.name != namespace.name:
+                    raise RuntimeError(
+                        f"Entrypoint name {ep.name!r} and actual name {namespace.name!r} mismatch.")
+                backends.append(namespace)
+            except Exception as e:
+                warnings.warn(
+                    f"Skipping backend {ep.name} due to error: {e}",
+                    UserWarning, 3
+                )
+
+        return sorted(backends, key=lambda x: x.name)
 
     @functools.lru_cache(maxsize=128)
     def known_type(self, relevant_type, primary=False):
@@ -578,8 +631,9 @@ class BackendSystem:
         new_backend = Backend.from_namespace(info_namespace)
         if new_backend.name in self.backends:
             warnings.warn(
-                UserWarning,
-                f"Backend of name '{new_backend.name}' already exists. Ignoring second!")
+                f"Backend of name '{new_backend.name}' already exists. Ignoring second!",
+                UserWarning, 3
+            )
             return
         self.backends[new_backend.name] = new_backend
 
@@ -624,7 +678,7 @@ class BackendSystem:
 
         return wrap_callable
 
-    @property
+    @functools.cached_property
     def backend_opts(self):
         """Property returning a :py:class:`BackendOpts` class specific to this library
         (tied to this backend system).
@@ -728,6 +782,12 @@ class _Implentations(dict):
             info.get("uses_context", False),
         )
 
+    def __repr__(self):
+        # Combine evaluated and non-evaluated information for printing.
+        all_infos = {}
+        all_infos.update(self._impl_infos)
+        all_infos.update(self)
+        return f"_Implentations({all_infos!r})"
 
 class Dispatchable:
     # Dispatchable function object
@@ -791,7 +851,7 @@ class Dispatchable:
     def _get_relevant_types(self, *args, **kwargs):
         # Return all relevant types, these are not filtered by the known_types
         if self._relevant_args is None:
-            return set(list(args) + [k for k in kwargs])
+            return set(type(val) for val in args) | set(type(k) for k in kwargs.values())
         else:
             return set(
                 type(val) for name, pos in self._relevant_args.items()
