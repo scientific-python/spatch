@@ -15,3 +15,14 @@ black = [
 [project.entry-points._spatch_example_backends]
 backend1 = 'spatch._spatch_example.entry_point'
 backend2 = 'spatch._spatch_example.entry_point2'
+
+[tool.pytest.ini_options]
+doctest_plus = "enabled"
+testpaths = [
+    "tests",
+    "spatch",  # for doc testing
+    "docs",
+]
+addopts = [
+    "--doctest-glob=docs/source/**.md",
+]

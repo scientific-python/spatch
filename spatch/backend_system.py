@@ -14,6 +14,9 @@ from spatch import from_identifier, get_identifier
 from spatch.utils import TypeIdentifier, valid_backend_name
 
 
+__doctest_skip__ = ["BackendOpts.__init__"]
+
+
 @dataclass(slots=True)
 class Backend:
     name: str
