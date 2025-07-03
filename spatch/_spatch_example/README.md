@@ -18,14 +18,12 @@ can be run to generate their `functions` context (i.e. if you add more functions
 
 For users we have the following basic capabilities.  Starting with normal
 type dispatching.
-First, import the functions and set up tracing:
+First, import the functions and set up tracing globally:
 ```pycon
 >>> import pprint
 >>> from spatch._spatch_example.library import divide, backend_opts
-
->>> # trace globally (or use `with backend_opts(trace=True) as trace`).
->>> opts = backend_opts(trace=True)
->>> opts.enable_globally()
+>>> opts = backend_opts(trace=True)  # enable tracing
+>>> opts.enable_globally()  # or with opts() as trace:
 
 ```
 Now try calling the various implementations:
