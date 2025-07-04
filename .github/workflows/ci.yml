@@ -6,6 +6,7 @@ on:
   push:
     branches:
       - main
+      - take2  # for testing
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -20,7 +21,6 @@ jobs:
   checks:
     name: Check Python ${{ matrix.python-version }} on ${{ matrix.runs-on }}
     runs-on: ${{ matrix.runs-on }}
-    needs: [pre-commit]
     strategy:
       fail-fast: false
       matrix:

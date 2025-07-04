@@ -1,1 +1,1 @@
-../../spatch/_spatch_example/README.md
+../../src/spatch/_spatch_example/README.md
