@@ -1,6 +1,6 @@
 try:
     from spatch.backend_utils import BackendImplementation
-except ModuleNotFoundError:
+except ModuleNotFoundError:  # pragma: no cover
     class Noop:
         def __call__(self, *args, **kwargs):
             return Noop()

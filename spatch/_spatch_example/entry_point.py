@@ -22,7 +22,7 @@ functions = {
 # and that includes with the types?!
 # higher_priority_than = ["default"]
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     # Run this file as a script to update this file
     from spatch.backend_utils import update_entrypoint
     from spatch._spatch_example.backend import backend1

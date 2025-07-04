@@ -26,3 +26,6 @@ testpaths = [
 addopts = [
     "--doctest-glob=docs/source/**.md",
 ]
+
+[tool.coverage.run]
+include = ["spatch/*"]
