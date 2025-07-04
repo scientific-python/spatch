@@ -6,7 +6,6 @@ on:
   push:
     branches:
       - main
-      - take2  # for testing
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
