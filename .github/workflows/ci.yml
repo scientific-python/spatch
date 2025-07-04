@@ -58,6 +58,6 @@ jobs:
   docs:
     uses: ./.github/workflows/build-docs.yml
     with:
-      # Deploy on tag pushes (assume that is a release) --ignoring for now
-      deploy: ${{ (github.event_name == 'push') }}
+      # Deploy on tag pushes (assume that is a release)
+      deploy: ${{ (github.event_name == 'push' && startsWith(github.ref, 'refs/tags')) }}
     secrets: inherit
