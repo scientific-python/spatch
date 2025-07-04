@@ -2,6 +2,9 @@
 
 <!-- SPHINX-START -->
 
+**`spatch` is still exploratory and design/API may change significantly
+based on feedback.**
+
 Spatch is a dispatching tool with a focus on scientific python libraries.
 It integrates two forms of dispatching into a single backend system:
 * Type dispatching for the main type used by a library.
@@ -73,9 +76,14 @@ with backend_opts(prioritize="gpu_backend"):
 it should be considered a prototype when it comes to API stability.
 
 Some examples for missing things we are still working on:
-* We only implemented exact type checks.  We expect subclass checks
-  and support for abstract types (e.g. "Array API enabled") to happen
-  in the future.
+* No way to conveniently see which backends may be used when calling a
+  function (rather than actually calling it). And probably more inspection
+  utilities.
+* We have implemented the ability for a backend to defer and not run,
+  but not the ability to run anyway if there is no alternative.
+* The main library implementation currently can't distinguish fallback
+  and default path easily. It should be easy to do this (two functions,
+  `should_run`, or just via `uses_context`).
 * `spatch` is very much designed to be fast but that doesn't mean it
   is particularly fast yet.  We may need to optimize parts (potentially
   lowering parts to a compiled language).
@@ -90,10 +98,9 @@ Other things are for example whether we want API like:
 * `dispatchable.invoke(type=, backend=)`.
 * Maybe libraries should use `like=` in functions that take no dispatchable
   arguments.
-* How do we do classes. We could provide "dispatchable methods" that "freeze"
-  the dispatching state/which backend is used for classes that are statefull
-  but where the state is only decided later, such as the `.fit()` method in
-  `sklearn`.
+* How do we do classes such as scikit-learn estimators. A simple solution might
+  a `get_backend(...)` dispatching explicitly once. But we could use more involved
+  schemes, rather remembering the dispatching state of the `.fit()`.
 
 We can also see many small conveniences, for example:
 * Extract the dispatchable arguments from type annotations.
