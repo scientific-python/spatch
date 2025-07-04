@@ -1,5 +1,8 @@
 # spatch documentation
 
+**`spatch` is still exploratory and design/API may change significantly
+based on feedback.**
+
 Spatch is a dispatching tool with a focus on scientific python libraries.
 This documentation provides an overview of user, library, and backend
 features.

@@ -1,9 +1,9 @@
 # spatch
 
-<!-- SPHINX-START -->
-
 **`spatch` is still exploratory and design/API may change significantly
 based on feedback.**
+
+<!-- SPHINX-START -->
 
 Spatch is a dispatching tool with a focus on scientific python libraries.
 It integrates two forms of dispatching into a single backend system:
