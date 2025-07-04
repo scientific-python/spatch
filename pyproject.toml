@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "spatch"
 authors = [
-    {name = "Jarrod Millman", email = "millman@berkeley.edu"},
+    {name = "Scientific Python Developers"},
 ]
 version = "0.0.0"
 description = "Coming soon"
