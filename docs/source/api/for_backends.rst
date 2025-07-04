@@ -23,7 +23,7 @@ Before writing a backend, you need to think about a few things:
 * Do you change behavior of the library (or existing major backends) by
   e.g. providing a faster but less accurate implementation?
   In that case, your backend should likely only be used if prioritized
-  by the user.  (`spatch` tries to make this the default)
+  by the user.
 
 Please check the example linked above.  These example entry-points include
 code that means running them modifies them in-place if the `@implements`
