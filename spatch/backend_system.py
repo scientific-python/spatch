@@ -888,9 +888,8 @@ class Dispatchable:
 
             context = DispatchContext(relevant_types, state, name)
 
-            # We use `is True` to possibly add information to the trace/log in the future.
             should_run = impl.should_run
-            if should_run is None or should_run(context, *args, **kwargs) is True:
+            if should_run is None or (should_run := should_run(context, *args, **kwargs)) is True:
                 if call_trace is not None:
                     call_trace.append((name, "called"))
 
@@ -899,8 +898,15 @@ class Dispatchable:
                 else:
                     return impl.function(*args, **kwargs)
 
+            elif should_run is not False:
+                # Strict to allow future use as "should run if needed only".  That would merge
+                # "can" and "should" run.  I can see a dedicated `can_run`, but see it as more
+                # useful if `can_run` was passed only cachable parameters (e.g. `method="meth"`,
+                # or even `backend=`, although that would be special).
+                # (We may tag on a reason for a non-True return value as well or use context.)
+                raise NotImplementedError(f"Currently, should run must return True or False.")
             elif trace is not None and impl.should_run is not None:
-                call_trace.append((name, "deferred in should run"))
+                call_trace.append((name, "skipped due to should_run returning False"))
 
         if call_trace is not None:
             call_trace.append(("default fallback", "called"))
