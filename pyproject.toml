@@ -1,7 +1,60 @@
+[build-system]
+requires = ["hatchling", "hatch-vcs", "hatch-fancy-pypi-readme"]
+build-backend = "hatchling.build"
+
 [project]
 name = "spatch"
 authors = [
-    {name = "Jarrod Millman", email = "millman@berkeley.edu"},
+    {name = "Scientific Python Developers"},
 ]
 version = "0.0.0"
 description = "Coming soon"
+readme = "README.md"
+license = "BSD-3-Clause"
+requires-python = ">=3.10"
+dependencies = ["importlib_metadata"]
+
+[dependency-groups]
+# black is used to format entry-point files
+backend_utils = ["black"]
+test = [
+  "pytest >=6",
+  "pytest-cov >=3",
+  "pytest-doctestplus",
+  { include-group = "backend_utils" },
+]
+dev = [
+  { include-group = "test" },
+  { include-group = "docs" },
+]
+docs = [
+  "sphinx>=7.0",
+  "sphinx-copybutton",
+  "pydata-sphinx-theme",
+  "myst-parser",
+]
+
+[tool.hatch.metadata.hooks.fancy-pypi-readme]
+content-type = "text/markdown"
+
+[[tool.hatch.metadata.hooks.fancy-pypi-readme.fragments]]
+path = "README.md"
+
+[project.entry-points._spatch_example_backends]
+backend1 = 'spatch._spatch_example.entry_point'
+backend2 = 'spatch._spatch_example.entry_point2'
+
+[tool.pytest.ini_options]
+doctest_plus = "enabled"
+testpaths = [
+    "tests",
+    "src/spatch",  # for doc testing
+    "docs",
+]
+norecursedirs = ["src"]
+addopts = [
+    "--doctest-glob=docs/source/**.md",
+]
+
+[tool.coverage]
+run.source = ["spatch"]
