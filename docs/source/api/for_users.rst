@@ -8,7 +8,7 @@ library documentation.
 
 In general, the main interaction with spatch will be to modify dispatching
 behavior.
-We expect further inspection and modification API to be added int he future.
+We expect further inspection and modification API to be added in the future.
 
 Modifying and tracing dispatching
 ---------------------------------

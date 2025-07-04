@@ -26,7 +26,7 @@ to a large scale deployment.
 
 Unfortunately, providing code for a host of such types isn't easy
 and the original library authors usually have neither the bandwidth nor
-expertise to do it.  Additionally, such layers would have to optional
+expertise to do it.  Additionally, such layers would have to be optional
 components of the library.
 
 `spatch` allows for a solution to this dilemma by allowing a third party
@@ -59,7 +59,7 @@ returns NumPy arrays (as the library always did).
 Backend selection _modifies_ behavior rather than extending it.  In some
 cases those modifications may be small (maybe it is really only faster).
 For the user, backend _selection_ often means that they should explicitly
-select prefer a backend (e.g. over the default implementation).
+select a preferred backend (e.g. over the default implementation).
 This could be for example via a context manager:
 ```python
 with backend_opts(prioritize="gpu_backend"):
@@ -120,5 +120,5 @@ We would like to note that while `spatch` is designed in a way that tries
 to ensure that simply installing a backend will not modify library behavior,
 in practice it must be the backend author who ensures this.
 
-Thus, backend authors must review library documentation and when it doubt
+Thus, backend authors must review library documentation and when in doubt
 contact the library authors about acceptable behavior.

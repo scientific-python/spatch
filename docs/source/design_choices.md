@@ -206,10 +206,10 @@ class SupportsArrayAPI(abc.ABC):
 ```
 Then you can use `"@mymodule:SupportsArrayAPI"` _almost_ like the normal use.
 
-### Why not use magic dunders (like NumPy, NetworkX, or Array API)?
+### Why not use dunder methods (like NumPy, NetworkX, or Array API)?
 
 Magic dunders (`__double_underscore_method__`) are a great way to implement
-type dispatchig (it's also how Python operators work)!
+type dispatching (it's also how Python operators work)!
 But it cannot serve our use-case (and also see advantages of entry-points).
 The reasons for this is that:
 * For NumPy/NetworkX, CuPy is the one that provides the type and thus can attach a

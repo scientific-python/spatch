@@ -7,7 +7,7 @@ At the moment we suggest to check the
 
 Entry point definition
 ----------------------
-To extend an existing library with a backend, you need to define an entry point.
+To extend an existing library with a backend, you need to define a `Python entry-point <https://packaging.python.org/en/latest/specifications/entry-points/>`_.
 This entry point includes the necessary information for spatch to find and
 dispatch to your backend.
 
@@ -43,7 +43,7 @@ the entry-point.
 As everything, they are identified by ``"__module__:__qualname__"`` strings,
 for example ``"numpy:ndarray"``.
 
-We suggest that backends to initially use exact type matches.
+We suggest that backends initially use exact type matches.
 At least for arrays, subclasses commonly change behavior in large ways
 (breaking Liskov substitution principle), so functions may not behave
 correctly for them anyway.
