@@ -1,0 +1,71 @@
+name: build-docs
+
+on:
+  workflow_call:
+    inputs:
+      deploy:
+        required: false
+        default: false
+        type: boolean
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: 'Publish docs?'
+        required: true
+        type: boolean
+
+concurrency:
+  group: docs-build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Many color libraries just need this to be set to any value, but at least
+  # one distinguishes color depth, where "3" -> "256-bit color".
+  FORCE_COLOR: 3
+
+jobs:
+  build:
+    name: Build and deploy docs
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          allow-prereleases: true
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Install package
+        run: uv sync
+
+      - name: Build docs
+        run: >-
+          cd docs;
+          uv run make html
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/build/html
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    if: inputs.deploy
+
+    permissions:
+      pages: write      # to deploy to Pages
+      id-token: write   # to verify the deployment originates from an appropriate source
+
+    # Deploy to the github-pages environment
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - uses: actions/deploy-pages@v4
+        if: inputs.deploy
