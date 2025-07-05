@@ -6,6 +6,7 @@ import functools
 import os
 import importlib_metadata
 import warnings
+import sys
 import textwrap
 from types import MethodType
 from typing import Any, Callable
@@ -649,11 +650,22 @@ class BackendSystem:
 
         Parameters
         ----------
-        dispatch_args : str, list, tuple, or None
-            The names of parameters to extract (we use inspect to
-            map these correctly).
-            If ``None`` all parameters will be considered relevant for
-            dispatching.
+        dispatch_args : str, sequence of str, dict, callable, or None
+            Indicate the parameters that we should consider for dispatching.
+            Parameters not listed here will be ignored for dispatching
+            purposes. For example, this may be all array inputs to a function.
+            Can be one of:
+
+            * ``None``: All parameters are used.
+            * string: The name of the parameter to extract.
+            * list or tuple of string: The names of parameters to extract.
+            * dict: A dictionary of `{name: position}` (not checked for
+              correctness).
+            * callable: A function that matches the signature and returns
+              an iterable of dispatch arguments.
+
+            If one or more names, ``spatch`` uses ``inspect.signature`` to
+            find which positional argument it refers to.
         module : str
             Override the module of the function (actually modifies it)
             to ensure a well defined and stable public API.
@@ -803,6 +815,7 @@ class _Implentations(dict):
         all_infos.update(self)
         return f"_Implentations({all_infos!r})"
 
+
 class Dispatchable:
     # Dispatchable function object
     #
@@ -818,10 +831,42 @@ class Dispatchable:
 
         self._ident = ident
 
-        if isinstance(dispatch_args, str):
-            dispatch_args = {dispatch_args: 0}
-        elif isinstance(dispatch_args, list | tuple):
-            dispatch_args = {val: i for i, val in enumerate(dispatch_args)}
+        if isinstance(dispatch_args, str | list | tuple):
+            import inspect
+
+            if isinstance(dispatch_args, str):
+                dispatch_args = (dispatch_args,)
+
+            sig = inspect.signature(func)
+            new_dispatch_args = {}
+            for i, p in enumerate(sig.parameters.values()):
+                if p.name not in dispatch_args:
+                    continue
+                if (
+                        p.kind == inspect.Parameter.POSITIONAL_ONLY or
+                        p.kind == inspect.Parameter.POSITIONAL_OR_KEYWORD
+                ):
+                    # Accepting it as a keyword is irrelevant here (fails later)
+                    new_dispatch_args[p.name] = i
+                elif p.kind == inspect.Parameter.KEYWORD_ONLY:
+                    new_dispatch_args[p.name] = sys.maxsize
+                else:
+                    raise TypeError(
+                        f"Parameter {p.name} is variable. Must use callable `dispatch_args`.")
+
+            if len(dispatch_args) != len(new_dispatch_args):
+                not_found = set(dispatch_args) - set(new_dispatch_args)
+                raise TypeError(f"Parameters not found in signature: {not_found!r}")
+            dispatch_args = new_dispatch_args
+        elif isinstance(dispatch_args, dict):
+            pass  # assume the dict is correct.
+        elif isinstance(dispatch_args, Callable):
+            # Simply use the function as is (currently ensure a tuple later)
+            self._get_dispatch_args = dispatch_args
+            dispatch_args = None
+        elif dispatch_args is not None:
+            raise ValueError(f"Invalid dispatch_args: {dispatch_args!r}")
+
         self._dispatch_args = dispatch_args
 
         new_doc = []
@@ -873,7 +918,7 @@ class Dispatchable:
             )
 
     def __call__(self, *args, **kwargs):
-        dispatch_args = self._get_dispatch_args(*args, **kwargs)
+        dispatch_args = tuple(self._get_dispatch_args(*args, **kwargs))
         # At this point dispatch_types is not filtered for known types.
         dispatch_types = set(type(val) for val in dispatch_args)
         state = self._backend_system._dispatch_state.get()
