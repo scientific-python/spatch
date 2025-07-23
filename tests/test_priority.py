@@ -17,11 +17,13 @@ class IntB2(BackendDummy):
     secondary_types = ()
     requires_opt_in = False
 
+
 class FloatB(BackendDummy):
     name = "FloatB"
     primary_types = ("builtins:float",)
     secondary_types = ("builtins:int",)
     requires_opt_in = False
+
 
 class FloatBH(BackendDummy):
     name = "FloatBH"
@@ -34,6 +36,7 @@ class FloatBH(BackendDummy):
     #  FloatBL > FloatBH > FloatB > FloatB)
     higher_priority_than = ("FloatB", "FloatBL")
     requires_opt_in = False
+
 
 class FloatBL(BackendDummy):
     name = "FloatBL"
@@ -58,24 +61,35 @@ class RealB(BackendDummy):
     requires_opt_in = False
 
 
-@pytest.mark.parametrize("backends, expected", [
-    ([RealB(), IntB(), IntB2(), FloatB(), IntSubB()],
-     ["default", "IntB", "IntB2", "IntSubB", "FloatB", "RealB"]),
-    # Reverse, gives the same order, except for IntB and IntB2
-    ([RealB(), IntB(), IntB2(), FloatB(), IntSubB()][::-1],
-     ["default", "IntB2", "IntB", "IntSubB", "FloatB", "RealB"]),
-    # And check that manual priority works:
-    ([RealB(), IntB(), FloatB(), FloatBH(), FloatBL(), IntSubB()],
-     ["default", "IntB", "IntSubB", "FloatBH", "FloatB", "FloatBL", "RealB"]),
-    ([RealB(), IntB(), FloatB(), FloatBH(), FloatBL(), IntSubB()][::-1],
-     ["default", "IntB", "IntSubB", "FloatBH", "FloatB", "FloatBL", "RealB"]),
-])
+@pytest.mark.parametrize(
+    "backends, expected",
+    [
+        (
+            [RealB(), IntB(), IntB2(), FloatB(), IntSubB()],
+            ["default", "IntB", "IntB2", "IntSubB", "FloatB", "RealB"],
+        ),
+        # Reverse, gives the same order, except for IntB and IntB2
+        (
+            [RealB(), IntB(), IntB2(), FloatB(), IntSubB()][::-1],
+            ["default", "IntB2", "IntB", "IntSubB", "FloatB", "RealB"],
+        ),
+        # And check that manual priority works:
+        (
+            [RealB(), IntB(), FloatB(), FloatBH(), FloatBL(), IntSubB()],
+            ["default", "IntB", "IntSubB", "FloatBH", "FloatB", "FloatBL", "RealB"],
+        ),
+        (
+            [RealB(), IntB(), FloatB(), FloatBH(), FloatBL(), IntSubB()][::-1],
+            ["default", "IntB", "IntSubB", "FloatBH", "FloatB", "FloatBL", "RealB"],
+        ),
+    ],
+)
 def test_order_basic(backends, expected):
     bs = BackendSystem(
         None,
         environ_prefix="SPATCH_TEST",
         default_primary_types=("builtin:int",),
-        backends=backends
+        backends=backends,
     )
 
     order = bs.backend_opts().backends
@@ -88,10 +102,9 @@ def bs():
         None,
         environ_prefix="SPATCH_TEST",
         default_primary_types=("builtin:int",),
-        backends=[RealB(), IntB(), IntB2(), FloatB(), IntSubB()]
+        backends=[RealB(), IntB(), IntB2(), FloatB(), IntSubB()],
     )
-    assert bs.backend_opts().backends == (
-        "default", "IntB", "IntB2", "IntSubB", "FloatB", "RealB")
+    assert bs.backend_opts().backends == ("default", "IntB", "IntB2", "IntSubB", "FloatB", "RealB")
 
     # Add a dummy dispatchable function that dispatches on all arguments.
     @bs.dispatchable(None, module="<test>", qualname="dummy_func")
@@ -113,14 +126,12 @@ def test_global_opts_basic(bs):
 
 def test_opts_context_basic(bs):
     with bs.backend_opts(prioritize=("RealB",), disable=("IntB", "default")):
-        assert bs.backend_opts().backends == (
-            "RealB", "IntB2", "IntSubB", "FloatB")
+        assert bs.backend_opts().backends == ("RealB", "IntB2", "IntSubB", "FloatB")
 
         assert bs.dummy_func(a=1) == ("RealB", (), {"a": 1})
 
         # Also check nested context, re-enables IntB
         with bs.backend_opts(prioritize=("IntB",)):
-            assert bs.backend_opts().backends == (
-                "IntB", "RealB", "IntB2", "IntSubB", "FloatB")
+            assert bs.backend_opts().backends == ("IntB", "RealB", "IntB2", "IntSubB", "FloatB")
 
             assert bs.dummy_func(1) == ("IntB", (1,), {})

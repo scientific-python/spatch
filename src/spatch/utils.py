@@ -140,12 +140,13 @@ class TypeIdentifier:
     (In principle we could also walk the ``__mro__`` of the type we check
     and see if we find the superclass by name matching.)
     """
+
     def __init__(self, identifiers):
         self.identifiers = tuple(identifiers)
         # Fill in type information for later use, sort by identifier (without ~ or @)
-        self._type_infos = tuple(sorted(
-            (_TypeInfo(ident) for ident in identifiers), key=lambda ti: ti.identifier
-        ))
+        self._type_infos = tuple(
+            sorted((_TypeInfo(ident) for ident in identifiers), key=lambda ti: ti.identifier)
+        )
         self.is_abstract = any(info.is_abstract for info in self._type_infos)
         self._idents = frozenset(ti.identifier for ti in self._type_infos)
 
@@ -192,8 +193,7 @@ class TypeIdentifier:
         return any(ti.matches(type) for ti in self._type_infos)
 
     def __or__(self, other):
-        """Union of two sets of type identifiers.
-        """
+        """Union of two sets of type identifiers."""
         if not isinstance(other, TypeIdentifier):
             return NotImplemented
         return TypeIdentifier(set(self.identifiers + other.identifiers))

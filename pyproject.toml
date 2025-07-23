@@ -59,5 +59,9 @@ addopts = [
     "--doctest-glob=docs/source/**.md",
 ]
 
+[tool.black]
+line-length = 100
+target-version = ["py310", "py311", "py312", "py313"]
+
 [tool.coverage]
 run.source = ["spatch"]

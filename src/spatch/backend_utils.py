@@ -20,8 +20,7 @@ class BackendImplementation:
     impl_to_info: dict[str, BackendFunctionInfo]
 
     def __init__(self, backend_name: str):
-        """Helper class to create backends.
-        """
+        """Helper class to create backends."""
         self.name = backend_name
         self.api_to_info = {}  # {api_identity_string: backend_function_info}
         self.impl_to_info = {}  # {impl_identity_string: backend_function_info}
@@ -163,7 +162,7 @@ class MultiLineString:
         return "\n".join(
             [
                 "(",
-                *(repr(line + '\n') for line in self.lines[:-1]),
+                *(repr(line + "\n") for line in self.lines[:-1]),
                 repr(self.lines[-1]),
                 ")",
             ]
