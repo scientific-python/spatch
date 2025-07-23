@@ -34,10 +34,10 @@ Now try calling the various implementations:
 ```pycon
 >>> divide(1, 2)  # use the normal library implementation (int inputs)
 0
->>> divide(1., 2.)  # uses backend 1 (float input)
+>>> divide(1.0, 2.0)  # uses backend 1 (float input)
 hello from backend 1
 0.5
->>> divide(1j, 2.)  # uses backend 2 (complex input)
+>>> divide(1j, 2.0)  # uses backend 2 (complex input)
 hello from backend 2
 0.5j
 >>> pprint.pprint(opts.trace)
@@ -58,6 +58,7 @@ it over the default implementation for integer inputs as well:
 ```pycon
 >>> with backend_opts(prioritize="backend1"):
 ...     divide(1, 2)  # now uses backend1
+...
 hello from backend 1
 0
 
@@ -68,7 +69,8 @@ We can still also prioritize "backend1" if we want:
 
 ```pycon
 >>> with backend_opts(prioritize=["backend2", "backend1"]):
-...     divide(1., 2.)  # now uses backend2
+...     divide(1.0, 2.0)  # now uses backend2
+...
 hello from backend 2
 0.5
 >>> pprint.pprint(opts.trace[-2:])
@@ -101,17 +103,20 @@ must be aware that this can even easier break their or third party code:
 ```pycon
 >>> with backend_opts(type=float):
 ...     divide(1, 2)  # returns float (via backend 1)
+...
 hello from backend 1
 0.5
 >>> with backend_opts(type=complex):
 ...     # backen 2 returning a float for complex "input" is probably OK
 ...     # (but may be debatable)
 ...     divide(1, 2)
+...
 hello from backend 2
 0.5
 >>> with backend_opts(type=float, prioritize="backend2"):
-...    # we can of course combine both type and prioritize.
-...    divide(1, 2)  # backend 2 with float result (int inputs).
+...     # we can of course combine both type and prioritize.
+...     divide(1, 2)  # backend 2 with float result (int inputs).
+...
 hello from backend 2
 0.5
 >>> pprint.pprint(opts.trace[-3:])
