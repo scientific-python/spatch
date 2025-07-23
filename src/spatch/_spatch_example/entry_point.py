@@ -24,7 +24,7 @@ functions = {
 
 if __name__ == "__main__":  # pragma: no cover
     # Run this file as a script to update this file
-    from spatch.backend_utils import update_entrypoint
     from spatch._spatch_example.backend import backend1
+    from spatch.backend_utils import update_entrypoint
 
     update_entrypoint(__file__, backend1, "spatch._spatch_example.backend")

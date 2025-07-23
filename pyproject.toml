@@ -71,7 +71,7 @@ target-version = "py310"
 extend-select = [
   # Defaults from https://github.com/scientific-python/cookie
   "B",      # flake8-bugbear
-  # "I",    # isort
+  "I",      # isort
   "ARG",    # flake8-unused-arguments
   "C4",     # flake8-comprehensions
   "EM",     # flake8-errmsg

@@ -1,9 +1,9 @@
-from importlib import import_module
-from importlib.metadata import version
-from dataclasses import dataclass, field
 import re
 import sys
 import warnings
+from dataclasses import dataclass, field
+from importlib import import_module
+from importlib.metadata import version
 
 
 def get_identifier(obj):

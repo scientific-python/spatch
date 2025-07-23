@@ -1,19 +1,19 @@
 import contextvars
 import dataclasses
-from dataclasses import dataclass
 import functools
 import os
-import importlib_metadata
-import warnings
 import sys
 import textwrap
+import warnings
+from collections.abc import Callable
+from dataclasses import dataclass
 from types import MethodType
 from typing import Any
-from collections.abc import Callable
+
+import importlib_metadata
 
 from spatch import from_identifier, get_identifier
 from spatch.utils import TypeIdentifier, valid_backend_name
-
 
 __doctest_skip__ = ["BackendOpts.__init__"]
 
