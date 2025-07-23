@@ -102,6 +102,11 @@ repos:
     hooks:
       - id: check-dependabot
       - id: check-github-workflows
+  # TODO: get zizmor to pass, and maybe set it up as a github action
+  # - repo: https://github.com/woodruffw/zizmor-pre-commit
+  #   rev: v1.11.0
+  #   hooks:
+  #     - id: zizmor
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
