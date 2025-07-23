@@ -97,6 +97,11 @@ repos:
     rev: v1.37.1
     hooks:
       - id: yamllint
+  - repo: https://github.com/python-jsonschema/check-jsonschema
+    rev: 0.33.2
+    hooks:
+      - id: check-dependabot
+      - id: check-github-workflows
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
