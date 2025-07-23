@@ -5,9 +5,11 @@
 #   $ pre-commit install
 #
 ci:
+  autofix_prs: false
+  autoupdate_schedule: quarterly
   autoupdate_commit_msg: "chore: update pre-commit hooks"
   autofix_commit_msg: "style: pre-commit fixes"
-  autoupdate_schedule: "quarterly"
+  skip: [no-commit-to-branch]
 fail_fast: false
 default_language_version:
   python: python3
@@ -77,11 +79,13 @@ repos:
     hooks:
       - id: codespell
         types_or: [python, markdown, rst, toml, yaml]
-        additional_dependencies: [tomli]
+        additional_dependencies:
+          - tomli; python_version<'3.11'
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.12.4
     hooks:
       - id: ruff-check
+      # - id: ruff-format  # Prefer black, but may temporarily uncomment this to see
   # `pyroma` may help keep our package standards up to date if best practices change.
   # This is probably a "low value" check though and safe to remove if we want faster pre-commit.
   # - repo: https://github.com/regebro/pyroma
@@ -127,6 +131,22 @@ repos:
   #   rev: v1.11.0
   #   hooks:
   #     - id: zizmor
+  - repo: local
+    hooks:
+      - id: disallow-caps
+        name: Disallow improper capitalization
+        language: pygrep
+        entry: PyBind|Numpy|Cmake|CCache|Github|PyTest|RST|PyLint
+        exclude: (.pre-commit-config.yaml|docs/pages/guides/style\.md)$
+      - id: disallow-words
+        name: Disallow certain words
+        language: pygrep
+        entry: "[Ff]alsey"
+        exclude: .pre-commit-config.yaml$
+      - id: disallow-bad-permalinks
+        name: Disallow _ in permalinks
+        language: pygrep
+        entry: "^permalink:.*_.*"
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:

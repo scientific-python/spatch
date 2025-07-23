@@ -45,8 +45,7 @@ def get_project_version(project_name, *, action_if_not_found="warn", default=Non
     """
     if action_if_not_found not in {"ignore", "warn", "raise"}:
         raise ValueError(
-            "`action=` keyword must be 'ignore', 'warn', or 'raise'; "
-            f"got: {action_if_not_found!r}."
+            f"`action=` keyword must be 'ignore', 'warn', or 'raise'; got: {action_if_not_found!r}."
         )
     try:
         project_version = version(project_name)
