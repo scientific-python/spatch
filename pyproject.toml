@@ -69,12 +69,10 @@ target-version = "py310"
 
 [tool.ruff.lint]
 extend-select = [
-  # Defaults from https://github.com/scientific-python/cookie
+  # Defaults from https://github.com/scientific-python/cookie excluding ARG and EM
   "B",      # flake8-bugbear
   "I",      # isort
-  "ARG",    # flake8-unused-arguments
   "C4",     # flake8-comprehensions
-  "EM",     # flake8-errmsg
   "ICN",    # flake8-import-conventions
   "PGH",    # pygrep-hooks
   "PIE",    # flake8-pie
@@ -112,6 +110,10 @@ extend-select = [
   "W",   # pycodestyle Warning
   "F",   # pyflakes
   "TRY", # tryceratops
+
+  # Maybe consider
+  # "EM",  # flake8-errmsg (Perhaps nicer, but it's a lot of work)
+  # "ALL", # to see everything!
 ]
 unfixable = [
   "F841", # unused-variable (Note: can leave useless expression)
@@ -125,10 +127,12 @@ ignore = [
   "RUF012",  # Mutable class attributes should be annotated with `typing.ClassVar` (Note: no annotations yet)
   "RUF021",  # parenthesize-chained-operators (Note: results don't look good yet)
   "RUF023",  # unsorted-dunder-slots (Note: maybe fine, but noisy changes)
-  "S310",  # Audit URL open for permitted schemes (Note: we don't download URLs in normal usage)
+  "S310",    # Audit URL open for permitted schemes (Note: we don't download URLs in normal usage)
   "TRY004",  # Prefer `TypeError` exception for invalid type (Note: good advice, but not worth the nuisance)
+  "TRY301",  # Abstract `raise` to an inner function
 
   # Intentionally ignored
+  "B019",    # Use of `functools.lru_cache` or `functools.cache` on methods can lead to memory leaks
   "COM812",  # Trailing comma missing
   "D203",    # 1 blank line required before class docstring (Note: conflicts with D211, which is preferred)
   "D213",    # (Note: conflicts with D212, which is preferred)
@@ -141,6 +145,7 @@ ignore = [
   "N818",    # Exception name ... should be named with an Error suffix (Note: good advice)
   "PERF203", # `try`-`except` within a loop incurs performance overhead (Note: too strict)
   "PLC0205", # Class `__slots__` should be a non-string iterable (Note: string is fine)
+  "PLC0415", # `import` should be at the top-level of a file (Note: good advice, too strict)
   "PLR0124", # Name compared with itself, consider replacing `x == x` (Note: too strict)
   "PLR0911", # Too many return statements
   "PLR0912", # Too many branches
@@ -172,11 +177,24 @@ ignore = [
   "PYI", # flake8-pyi (We don't have stub files yet)
   "SLF", # flake8-self (We can use our own private variables--sheesh!)
   "TCH", # flake8-type-checking (Note: figure out type checking later)
+  "ARG", # flake8-unused-arguments (Sometimes helpful, but too strict)
   "TD",  # flake8-todos (Maybe okay to add some of these)
   "FIX", # flake8-fixme (like flake8-todos)
   "ERA", # eradicate (We like code in comments!)
   "PD",  # pandas-vet (Intended for scripts that use pandas, not libraries)
 ]
+
+[tool.ruff.lint.per-file-ignores]
+"src/spatch/**/__init__.py" = ["F401"]  # Allow unused import (w/o defining `__all__`)
+"src/spatch/_spatch_example/backend.py" = ["T201"]  # Allow print
+"docs/**/*.py" = ["INP001"] # Not a package
+"tests/*.py" = [
+  "S101",   # Allow assert
+  "INP001", # Not a package
+]
+
+[tool.ruff.lint.flake8-builtins]
+builtins-ignorelist = ["copyright", "type"]
 
 [tool.ruff.lint.flake8-pytest-style]
 fixture-parentheses = false

@@ -1,5 +1,6 @@
 from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 
 from .utils import from_identifier, get_identifier
 
@@ -119,7 +120,7 @@ class BackendImplementation:
 
         def inner(func: Callable):
             identity = get_identifier(func)
-            if identity.endswith(":<lambda>") or identity.endswith(":_"):
+            if identity.endswith((":<lambda>", ":_")):
                 backend_func._should_run = func
                 identity = f"{impl_identity}._should_run"
             info = self.impl_to_info[impl_identity]
@@ -234,8 +235,8 @@ def update_entrypoint(
     ]
 
     # Step 4: replace text
-    with open(filepath) as f:
+    with Path(filepath).open("r") as f:
         text = f.read()
     text = update_text(text, lines, "functions", indent=indent)
-    with open(filepath, "w") as f:
+    with Path(filepath).open("w") as f:
         f.write(text)

@@ -172,7 +172,7 @@ class TypeIdentifier:
                 # We have the same identifier, check if other represents
                 # subclasses of this.
                 any_subclass = False
-                for self_ti, other_ti in zip(self._type_infos, other._type_infos):
+                for self_ti, other_ti in zip(self._type_infos, other._type_infos, strict=True):
                     if self_ti.allow_subclasses == other_ti.allow_subclasses:
                         continue
                     if self_ti.allow_subclasses and not other_ti.allow_subclasses:
@@ -197,3 +197,6 @@ class TypeIdentifier:
         if not isinstance(other, TypeIdentifier):
             return NotImplemented
         return TypeIdentifier(set(self.identifiers + other.identifiers))
+
+
+EMPTY_TYPE_IDENTIFIER = TypeIdentifier([])

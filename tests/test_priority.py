@@ -62,7 +62,7 @@ class RealB(BackendDummy):
 
 
 @pytest.mark.parametrize(
-    "backends, expected",
+    ("backends", "expected"),
     [
         (
             [RealB(), IntB(), IntB2(), FloatB(), IntSubB()],

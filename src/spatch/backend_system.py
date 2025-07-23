@@ -13,7 +13,7 @@ from typing import Any
 import importlib_metadata
 
 from spatch import from_identifier, get_identifier
-from spatch.utils import TypeIdentifier, valid_backend_name
+from spatch.utils import EMPTY_TYPE_IDENTIFIER, TypeIdentifier, valid_backend_name
 
 __doctest_skip__ = ["BackendOpts.__init__"]
 
@@ -21,8 +21,8 @@ __doctest_skip__ = ["BackendOpts.__init__"]
 @dataclass(slots=True)
 class Backend:
     name: str
-    primary_types: TypeIdentifier = TypeIdentifier([])
-    secondary_types: TypeIdentifier = TypeIdentifier([])
+    primary_types: TypeIdentifier = EMPTY_TYPE_IDENTIFIER
+    secondary_types: TypeIdentifier = EMPTY_TYPE_IDENTIFIER
     functions: dict = dataclasses.field(default_factory=dict)
     known_backends: frozenset = frozenset()
     higher_priority_than: frozenset = frozenset()
@@ -60,9 +60,7 @@ class Backend:
 
     def matches(self, dispatch_types):
         matches = frozenset(self.known_type(t) for t in dispatch_types)
-        if "primary" in matches and False not in matches:
-            return True
-        return False
+        return "primary" in matches and False not in matches
 
     def compare_with_other(self, other):
         # NOTE: This function is a symmetric comparison
@@ -501,6 +499,7 @@ class BackendSystem:
                 UserWarning,
                 2,
             )
+        self._environ_prefix = environ_prefix
 
         # Note that the order of adding backends matters, we add `backends` first
         # and then entry point ones in alphabetical order.
@@ -544,21 +543,21 @@ class BackendSystem:
         )
         self._dispatch_state = contextvars.ContextVar(f"{group}.dispatch_state", default=state)
 
-    @staticmethod
-    def _toposort(graph):
+    def _toposort(self, graph):
         # Adapted from Wikipedia's depth-first pseudocode. We are not using graphlib,
         # because it doesn't preserve the original order correctly.
         # This depth-first approach does preserve it.
-        def visit(node, order, _visiting={}):
+        def visit(node, order, _visiting):
             if node in order:
                 return
             if node in _visiting:
-                cycle = (tuple(_visiting.keys()) + (node,))[::-1]
+                cycle = (*_visiting.keys(), node)[::-1]
                 raise RuntimeError(
                     f"Backends form a priority cycle.  This is a bug in a backend or your\n"
-                    f"environment settings. Check the environment variable {environ_prefix}_SET_ORDER\n"
+                    "environment settings. Check the environment variable "
+                    f"{self._environ_prefix}_SET_ORDER\n"
                     f"and change it for example to:\n"
-                    f'    {environ_prefix}_SET_ORDER="{cycle[-1]}>{cycle[-2]}"\n'
+                    f'    {self._environ_prefix}_SET_ORDER="{cycle[-1]}>{cycle[-2]}"\n'
                     f"to break the offending cycle:\n"
                     f"    {'>'.join(cycle)}"
                 ) from None
@@ -570,10 +569,10 @@ class BackendSystem:
             del _visiting[node]
             order[node] = None  # add sorted node
 
-        to_sort = list(graph.keys())
+        # to_sort = list(graph.keys())  # @eriknw to @seberg: should this be used?
         order = {}  # dict as a sorted set
         for n in list(graph.keys()):
-            visit(n, order)
+            visit(n, order, {})
 
         return tuple(order.keys())
 
@@ -604,10 +603,7 @@ class BackendSystem:
 
     @functools.lru_cache(maxsize=128)
     def known_type(self, dispatch_type, primary=False):
-        for backend in self.backends.values():
-            if backend.known_type(dispatch_type):
-                return True
-        return False
+        return any(backend.known_type(dispatch_type) for backend in self.backends.values())
 
     def get_known_unique_types(self, dispatch_types):
         # From a list of args, return only the set of dispatch types
@@ -852,13 +848,10 @@ class Dispatchable:
             for i, p in enumerate(sig.parameters.values()):
                 if p.name not in dispatch_args:
                     continue
-                if (
-                    p.kind == inspect.Parameter.POSITIONAL_ONLY
-                    or p.kind == inspect.Parameter.POSITIONAL_OR_KEYWORD
-                ):
+                if p.kind in {p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD}:
                     # Accepting it as a keyword is irrelevant here (fails later)
                     new_dispatch_args[p.name] = i
-                elif p.kind == inspect.Parameter.KEYWORD_ONLY:
+                elif p.kind == p.KEYWORD_ONLY:
                     new_dispatch_args[p.name] = sys.maxsize
                 else:
                     raise TypeError(
