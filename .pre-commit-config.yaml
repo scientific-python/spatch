@@ -47,6 +47,12 @@ repos:
     hooks:
       - id: autoflake
         args: [--in-place]
+  # Let's keep `pyupgrade` even though `ruff --fix` probably does most of it
+  - repo: https://github.com/asottile/pyupgrade
+    rev: v3.20.0
+    hooks:
+      - id: pyupgrade
+        args: [--py310-plus]
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:

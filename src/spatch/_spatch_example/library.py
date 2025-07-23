@@ -1,4 +1,3 @@
-
 from spatch.backend_system import BackendSystem
 
 _backend_system = BackendSystem(

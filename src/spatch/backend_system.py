@@ -8,7 +8,8 @@ import warnings
 import sys
 import textwrap
 from types import MethodType
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 
 from spatch import from_identifier, get_identifier
 from spatch.utils import TypeIdentifier, valid_backend_name
@@ -919,7 +920,7 @@ class Dispatchable:
     def __call__(self, *args, **kwargs):
         dispatch_args = tuple(self._get_dispatch_args(*args, **kwargs))
         # At this point dispatch_types is not filtered for known types.
-        dispatch_types = set(type(val) for val in dispatch_args)
+        dispatch_types = {type(val) for val in dispatch_args}
         state = self._backend_system._dispatch_state.get()
         ordered_backends, type_, prioritized, trace = state
 
