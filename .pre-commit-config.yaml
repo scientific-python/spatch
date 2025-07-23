@@ -36,6 +36,11 @@ repos:
         args: [--fix=lf]
       # - id: requirements-txt-fixer  # No requirements.txt file yet
       - id: trailing-whitespace
+  - repo: https://github.com/abravalheri/validate-pyproject
+    rev: v0.24.1
+    hooks:
+      - id: validate-pyproject
+        name: Validate pyproject.toml
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
