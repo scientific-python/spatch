@@ -25,9 +25,8 @@ Particularly important design considerations are:
   of library authors much harder.
 
 % This section really just to keep the first TOC a bit cleaner...
-Specific design questions/reasons
 
----
+## Specific design questions/reasons
 
 The following are some specific questions/arguments. The answers may be
 rambling at times :).
