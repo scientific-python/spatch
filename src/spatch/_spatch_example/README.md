@@ -95,7 +95,7 @@ hello from backend 1
 0.5
 >>> with backend_opts(type=complex):
 ...     # backen 2 returning a float for complex "input" is probably OK
-...     # (but may be debateable)
+...     # (but may be debatable)
 ...     divide(1, 2)
 hello from backend 2
 0.5

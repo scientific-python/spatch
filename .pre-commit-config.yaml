@@ -63,10 +63,18 @@ repos:
     hooks:
       - id: ruff-check
         args: [--fix-only, --show-fixes]
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.4.1
+    hooks:
+      - id: codespell
+        types_or: [python, markdown, rst, toml, yaml]
+        additional_dependencies: [tomli]
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.12.4
     hooks:
       - id: ruff-check
+  # `pyroma` may help keep our package standards up to date if best practices change.
+  # This is probably a "low value" check though and safe to remove if we want faster pre-commit.
   - repo: https://github.com/regebro/pyroma
     rev: "5.0"
     hooks:

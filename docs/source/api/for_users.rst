@@ -18,13 +18,13 @@ Libraries will re-expose all of this functionality under their own API/names.
 There are currently three global environment variables to modify dispatching
 behavior at startup time:
 
-* ``<SPECIFIC_NAME>_PRIORITIZE``: Comma seperated list of backends.
+* ``<SPECIFIC_NAME>_PRIORITIZE``: Comma separated list of backends.
   This is the same as :py:class:`BackendOpts` ``prioritize=`` option.
-* ``<SPECIFIC_NAME>_BLOCK``: Comma seperated list of backends.
+* ``<SPECIFIC_NAME>_BLOCK``: Comma separated list of backends.
   This prevents loading the backends as if they were not installed.
   No backend code will be executed (its entry-point will not be loaded).
-* ``<SPECIFIC_NAME>_SET_ORDER``: Comma seperated list of backend orders.
-  seperated by ``>``.  I.e. ``name1>name2,name3>name2`` means that ``name1``
+* ``<SPECIFIC_NAME>_SET_ORDER``: Comma separated list of backend orders.
+  separated by ``>``.  I.e. ``name1>name2,name3>name2`` means that ``name1``
   and ``name3`` are ordered before ``name2``.  This is more fine-grained
   than the above two and the above two take precedence.  Useful to fix relative
   order of backends without affecting the priority of backends not listed

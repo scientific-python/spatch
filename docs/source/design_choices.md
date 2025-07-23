@@ -76,7 +76,7 @@ square it.
 2. Use the GPU for NumPy arrays (i.e. make code faster hopefully without
    changing behavior significantly).
 3. Enforce _unsafe_ use of `cupy` arrays ("zero code change" story)
-   because point 2. would incure unnecessary and slow host/device copies.
+   because point 2. would incur unnecessary and slow host/device copies.
 
 The first use-case is implicit: The user never has to do anything, it will
 always just work.
@@ -228,7 +228,7 @@ We would agree that piggy backing on an existing dunder approach (such as the
 Array API) seems nice.
 But ultimately it would be far less flexible (Array API has no backend selection)
 and be more complex since the Array API would have to provide infrastructure that
-can deal with aribtrary libraries different backends for each of them.
+can deal with arbitrary libraries different backends for each of them.
 To us, it seems simply the wrong way around:  The library should dispatch and it
 can dispatch to a function that uses the Array API.
 
@@ -277,7 +277,7 @@ use-case seems just far more relevant.  We think the reason for this are:
   `import cupy as np` then it is to also modify many library imports.
 
 ```{admonition} Future note
-`spatch` endevors to provide a more explicit path (and if this gets outdated, maybe we do).
+`spatch` endeavors to provide a more explicit path (and if this gets outdated, maybe we do).
 We expect this to be more of the form of `library.function.invoke(state, ...)` or also
 `state.invoke(library.function, ...)` or `library.function.invoke(backend=)(...)`.
 
@@ -330,7 +330,7 @@ neither backend authors or end-users need to understand the "how".
 
 Of course, one can avoid this complexity by just asking backends to fix the order where
 if it matters.
-We believe that the current complexity in spatch is managable, although we would agree that
+We believe that the current complexity in spatch is manageable, although we would agree that
 a library that isn't dedicated to dispatching should likely avoid it.
 
 

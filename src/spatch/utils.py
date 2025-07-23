@@ -114,7 +114,7 @@ class _TypeInfo:
             return False
 
         if not self.is_abstract and self.module not in sys.modules:
-            # If this isn't an abstract type there can't be sublasses unless
+            # If this isn't an abstract type there can't be subclasses unless
             # the module was already imported.
             return False
 

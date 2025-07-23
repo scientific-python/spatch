@@ -89,7 +89,7 @@ def compare_backends(backend1, backend2, prioritize_over):
 
     # Sort by the backends compare function (i.e. type hierarchy and manual order).
     # We default to a type based comparisons but allow overriding this, so check
-    # both ways (to find the overriding).  This also find inconcistencies.
+    # both ways (to find the overriding).  This also find inconsistencies.
     cmp1 = backend1.compare_with_other(backend2)
     cmp2 = backend2.compare_with_other(backend1)
     if cmp1 is NotImplemented and cmp2 is NotImplemented:
@@ -229,7 +229,7 @@ class BackendOpts:
         type
             The type to dispatch for within this context.
         trace
-            The trace object (currenly a list as described in the examples).
+            The trace object (currently a list as described in the examples).
             If used, the trace is also returned when entering the context.
 
         Notes
@@ -275,7 +275,7 @@ class BackendOpts:
         Backends should simply document their behavior with ``backend_opts`` and
         which usage pattern they see for their users.
 
-        Tracing calls can be done using, where ``trace`` is a list of informations for
+        Tracing calls can be done using, where ``trace`` is a list of information for
         each call.  This contains a tuple of the function identifier and a list of
         backends called (typically exactly one, but it will also note if a backend deferred
         via ``should_run``).
@@ -318,7 +318,7 @@ class BackendOpts:
         is safer to use the contextmanager ``with`` statement instead.
 
         This method will issue a warning if the
-        dispatching state has been previously modified programatically.
+        dispatching state has been previously modified programmatically.
         """
         curr_state = self._dispatch_state.get(None)  # None used before default
         # If the state was never set or the state matches (ignoring trace)
@@ -533,7 +533,7 @@ class BackendSystem:
 
         # Finalize backends to be a dict sorted by priority.
         self.backends = {b: self.backends[b] for b in order}
-        # The state is the ordered (active) backends and the prefered type (None)
+        # The state is the ordered (active) backends and the preferred type (None)
         # and the trace (None as not tracing).
         base_state = (order, None, frozenset(), None)
         disable = {b.name for b in self.backends.values() if b.requires_opt_in}
@@ -965,7 +965,7 @@ class Dispatchable:
             if should_run is not False:
                 # Strict to allow future use as "should run if needed only".  That would merge
                 # "can" and "should" run.  I can see a dedicated `can_run`, but see it as more
-                # useful if `can_run` was passed only cachable parameters (e.g. `method="meth"`,
+                # useful if `can_run` was passed only cacheable parameters (e.g. `method="meth"`,
                 # or even `backend=`, although that would be special).
                 # (We may tag on a reason for a non-True return value as well or use context.)
                 raise NotImplementedError("Currently, should run must return True or False.")
