@@ -97,6 +97,7 @@ repos:
     rev: v3.6.2
     hooks:
       - id: prettier
+        args: [--prose-wrap=preserve]
   - repo: https://github.com/sphinx-contrib/sphinx-lint
     rev: v1.0.0
     hooks:
