@@ -1,0 +1,46 @@
+# https://pre-commit.com/
+#
+# Before first use:
+#
+#   $ pre-commit install
+#
+fail_fast: false
+default_language_version:
+  python: python3
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      # Sanity checks
+      - id: check-added-large-files
+      - id: check-case-conflict
+      # - id: check-executables-have-shebangs  # No executable files yet
+      - id: check-illegal-windows-names
+      - id: check-merge-conflict
+      # Checks based on file type
+      - id: check-ast
+      # - id: check-json  # No json files yet
+      - id: check-symlinks
+      - id: check-toml
+      # - id: check-xml  # No xml files yet
+      - id: check-yaml
+      # Detect mistakes
+      - id: check-vcs-permalinks
+      - id: debug-statements
+      - id: destroyed-symlinks
+      - id: detect-private-key
+      - id: forbid-submodules
+      # Automatic fixes
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      # - id: requirements-txt-fixer  # No requirements.txt file yet
+      - id: trailing-whitespace
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: no-commit-to-branch  # No commit directly to main
+  - repo: meta
+    hooks:
+      - id: check-hooks-apply
+      - id: check-useless-excludes

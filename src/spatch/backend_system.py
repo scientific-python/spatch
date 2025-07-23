@@ -698,7 +698,7 @@ class BackendSystem:
     def backend_opts(self):
         """Property returning a :py:class:`BackendOpts` class specific to this library
         (tied to this backend system).
-        """        
+        """
         return type(
             f"BackendOpts",
             (BackendOpts,),

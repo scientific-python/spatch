@@ -36,4 +36,3 @@ class BackendDummy:
     def dummy_func(cls, *args, **kwargs):
         # Always define a small function that mainly forwards.
         return cls.name, args, kwargs
-

@@ -48,4 +48,3 @@ def test_context_basic():
         assert set(ctx.types) == {float}
         assert ctx.dispatch_args == ()
         assert not ctx.prioritized  # not prioritized "just" type enforced
-
