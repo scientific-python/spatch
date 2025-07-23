@@ -68,6 +68,51 @@ line-length = 100
 target-version = "py310"
 
 [tool.ruff.lint]
+extend-select = [
+  # Defaults from https://github.com/scientific-python/cookie
+  "B",      # flake8-bugbear
+  # "I",    # isort
+  "ARG",    # flake8-unused-arguments
+  "C4",     # flake8-comprehensions
+  "EM",     # flake8-errmsg
+  "ICN",    # flake8-import-conventions
+  "PGH",    # pygrep-hooks
+  "PIE",    # flake8-pie
+  "PL",     # pylint
+  "PT",     # flake8-pytest-style
+  "PTH",    # flake8-use-pathlib
+  # "RET",  # flake8-return
+  "RUF",    # Ruff-specific
+  "SIM",    # flake8-simplify
+  "TID251", # flake8-tidy-imports.banned-api
+  "T20",    # flake8-print
+  "UP",     # pyupgrade
+  "YTT",    # flake8-2020
+
+  # Additional ones (may be unnecessary, low value, or a nuisance).
+  # It's okay to experiment and add or remove checks from here
+  "S",   # bandit
+  "A",   # flake8-builtins
+  "COM", # flake8-commas
+  "DTZ", # flake8-datetimez
+  "T10", # flake8-debugger
+  "EXE", # flake8-executable
+  "ISC", # flake8-implicit-str-concat
+  "G",   # flake8-logging-format
+  "INP", # flake8-no-pep420
+  "Q",   # flake8-quotes
+  "RSE", # flake8-raise
+  "NPY", # NumPy-specific rules
+  "N",   # pep8-naming
+  "PLC", # pylint Convention
+  "PLE", # pylint Error
+  "PLR", # pylint Refactor
+  "PLW", # pylint Warning
+  "E",   # pycodestyle Error
+  "W",   # pycodestyle Warning
+  "F",   # pyflakes
+  "TRY", # tryceratops
+]
 unfixable = [
   "F841", # unused-variable (Note: can leave useless expression)
   "B905", # zip-without-explicit-strict (Note: prefer `zip(x, y, strict=True)`)
@@ -124,11 +169,9 @@ ignore = [
   "BLE", # flake8-blind-except (Maybe consider)
   "FBT", # flake8-boolean-trap (Why?)
   "DJ",  # flake8-django (We don't use django)
-  "EM",  # flake8-errmsg (Perhaps nicer, but too much work)
   "PYI", # flake8-pyi (We don't have stub files yet)
   "SLF", # flake8-self (We can use our own private variables--sheesh!)
   "TCH", # flake8-type-checking (Note: figure out type checking later)
-  "ARG", # flake8-unused-arguments (Sometimes helpful, but too strict)
   "TD",  # flake8-todos (Maybe okay to add some of these)
   "FIX", # flake8-fixme (like flake8-todos)
   "ERA", # eradicate (We like code in comments!)
