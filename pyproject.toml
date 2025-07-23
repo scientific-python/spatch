@@ -66,14 +66,23 @@ backend1 = 'spatch._spatch_example.entry_point'
 backend2 = 'spatch._spatch_example.entry_point2'
 
 [tool.pytest.ini_options]
+minversion = "6.0"
 doctest_plus = "enabled"
 testpaths = [
   "tests",
   "src/spatch", # for doc testing
   "docs",
 ]
+xfail_strict = true
 norecursedirs = ["src"]
-addopts = ["--doctest-glob=docs/source/**.md"]
+addopts = [
+  "--doctest-glob=docs/source/**.md",
+  "--strict-config",                  # Force error if config is misspelled
+  "--strict-markers",                 # Force error if marker is misspelled (must be defined in config)
+  "-ra",                              # Print summary of all fails/errors
+]
+log_cli_level = "info"
+filterwarnings = ["error"]
 
 [tool.black]
 line-length = 100

@@ -98,6 +98,17 @@ repos:
     hooks:
       - id: sphinx-lint
         args: [--enable, all, "--disable=line-too-long,leaked-markup"]
+  - repo: https://github.com/pre-commit/pygrep-hooks
+    rev: v1.10.0
+    hooks:
+      - id: rst-backticks
+      - id: rst-directive-colons
+      - id: rst-inline-touching-normal
+      - id: python-check-blanket-noqa
+      - id: python-check-blanket-type-ignore
+      - id: python-no-eval
+      - id: python-no-log-warn
+      - id: text-unicode-replacement-char
   - repo: https://github.com/ComPWA/taplo-pre-commit
     rev: v0.9.3
     hooks:
