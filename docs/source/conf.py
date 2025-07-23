@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import importlib.metadata
-from typing import Any
 
 project = "spatch"
 copyright = "2025, Spatch authors"
