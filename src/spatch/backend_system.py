@@ -139,12 +139,11 @@ def _modified_state(
             else:
                 raise ValueError("_modified_state() unknown_backends must be raise or ignore")
 
-    if type is not None:
-        if not backend_system.known_type(type, primary=True):
-            raise ValueError(
-                f"Type '{type}' not a valid primary type of any backend. "
-                "It is impossible to enforce use of this type for any function."
-            )
+    if type is not None and not backend_system.known_type(type, primary=True):
+        raise ValueError(
+            f"Type '{type}' not a valid primary type of any backend. "
+            "It is impossible to enforce use of this type for any function."
+        )
 
     ordered_backends, _, prioritized, curr_trace = curr_state
     prioritized = prioritized | frozenset(prioritize)
