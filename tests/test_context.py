@@ -1,5 +1,3 @@
-import pytest
-
 from spatch.backend_system import BackendSystem
 from spatch.testing import BackendDummy
 

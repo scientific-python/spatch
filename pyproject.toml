@@ -63,5 +63,84 @@ addopts = [
 line-length = 100
 target-version = ["py310", "py311", "py312", "py313"]
 
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+unfixable = [
+  "F841", # unused-variable (Note: can leave useless expression)
+  "B905", # zip-without-explicit-strict (Note: prefer `zip(x, y, strict=True)`)
+]
+ignore = [
+  # Maybe consider
+  "ANN",     # flake8-annotations (We don't fully use annotations yet)
+  "B904",    # Use `raise from` to specify exception cause (Note: sometimes okay to raise original exception)
+  "PERF401", # Use a list comprehension to create a transformed list (Note: poorly implemented atm)
+  "RUF012",  # Mutable class attributes should be annotated with `typing.ClassVar` (Note: no annotations yet)
+  "RUF021",  # parenthesize-chained-operators (Note: results don't look good yet)
+  "RUF023",  # unsorted-dunder-slots (Note: maybe fine, but noisy changes)
+  "S310",  # Audit URL open for permitted schemes (Note: we don't download URLs in normal usage)
+  "TRY004",  # Prefer `TypeError` exception for invalid type (Note: good advice, but not worth the nuisance)
+
+  # Intentionally ignored
+  "COM812",  # Trailing comma missing
+  "D203",    # 1 blank line required before class docstring (Note: conflicts with D211, which is preferred)
+  "D213",    # (Note: conflicts with D212, which is preferred)
+  "D400",    # First line should end with a period (Note: prefer D415, which also allows "?" and "!")
+  "N801",    # Class name ... should use CapWords convention (Note:we have a few exceptions to this)
+  "N802",    # Function name ... should be lowercase
+  "N803",    # Argument name ... should be lowercase (Maybe okay--except in tests)
+  "N806",    # Variable ... in function should be lowercase
+  "N807",    # Function name should not start and end with `__`
+  "N818",    # Exception name ... should be named with an Error suffix (Note: good advice)
+  "PERF203", # `try`-`except` within a loop incurs performance overhead (Note: too strict)
+  "PLC0205", # Class `__slots__` should be a non-string iterable (Note: string is fine)
+  "PLR0124", # Name compared with itself, consider replacing `x == x` (Note: too strict)
+  "PLR0911", # Too many return statements
+  "PLR0912", # Too many branches
+  "PLR0913", # Too many arguments to function call
+  "PLR0915", # Too many statements
+  "PLR2004", # Magic number used in comparison, consider replacing magic with a constant variable
+  "PLW0603", # Using the global statement to update ... is discouraged (Note: yeah, discouraged, but too strict)
+  "PLW0642", # Reassigned `self` variable in instance method (Note: too strict for us)
+  "PLW2901", # Outer for loop variable ... overwritten by inner assignment target (Note: good advice, but too strict)
+  "RET502",  # Do not implicitly `return None` in function able to return non-`None` value
+  "RET503",  # Missing explicit `return` at the end of function able to return non-`None` value
+  "RET504",  # Unnecessary variable assignment before `return` statement
+  "RUF018",  # Avoid assignment expressions in `assert` statements
+  "S110",    # `try`-`except`-`pass` detected, consider logging the exception (Note: good advice, but we don't log)
+  "S112",    # `try`-`except`-`continue` detected, consider logging the exception (Note: good advice, but we don't log)
+  "S603",    # `subprocess` call: check for execution of untrusted input (Note: not important for us)
+  "S607",    # Starting a process with a partial executable path (Note: not important for us)
+  "SIM102",  # Use a single `if` statement instead of nested `if` statements (Note: often necessary)
+  "SIM105",  # Use contextlib.suppress(...) instead of try-except-pass (Note: try-except-pass is much faster)
+  "SIM108",  # Use ternary operator ... instead of if-else-block (Note: if-else better for coverage and sometimes clearer)
+  "TRY003",  # Avoid specifying long messages outside the exception class (Note: why?)
+  "UP038",   # Use `X | Y` in `isinstance` call instead of `(X, Y)` (Note: using `|` is slower atm)
+
+  # Ignored categories
+  "C90", # mccabe (Too strict, but maybe we should make things less complex)
+  "BLE", # flake8-blind-except (Maybe consider)
+  "FBT", # flake8-boolean-trap (Why?)
+  "DJ",  # flake8-django (We don't use django)
+  "EM",  # flake8-errmsg (Perhaps nicer, but too much work)
+  "PYI", # flake8-pyi (We don't have stub files yet)
+  "SLF", # flake8-self (We can use our own private variables--sheesh!)
+  "TCH", # flake8-type-checking (Note: figure out type checking later)
+  "ARG", # flake8-unused-arguments (Sometimes helpful, but too strict)
+  "TD",  # flake8-todos (Maybe okay to add some of these)
+  "FIX", # flake8-fixme (like flake8-todos)
+  "ERA", # eradicate (We like code in comments!)
+  "PD",  # pandas-vet (Intended for scripts that use pandas, not libraries)
+]
+
+[tool.ruff.lint.flake8-pytest-style]
+fixture-parentheses = false
+mark-parentheses = false
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
+
 [tool.coverage]
 run.source = ["spatch"]
