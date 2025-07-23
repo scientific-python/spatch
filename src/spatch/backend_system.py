@@ -54,10 +54,9 @@ class Backend:
     def known_type(self, dispatch_type):
         if dispatch_type in self.primary_types:
             return "primary"  # TODO: maybe make it an enum?
-        elif dispatch_type in self.secondary_types:
+        if dispatch_type in self.secondary_types:
             return "secondary"
-        else:
-            return False
+        return False
 
     def matches(self, dispatch_types):
         matches = frozenset(self.known_type(t) for t in dispatch_types)
@@ -69,7 +68,7 @@ class Backend:
         # NOTE: This function is a symmetric comparison
         if other.name in self.higher_priority_than:
             return 2
-        elif other.name in self.lower_priority_than:
+        if other.name in self.lower_priority_than:
             return -2
 
         # If our primary types are a subset of the other, we match more
@@ -87,7 +86,7 @@ def compare_backends(backend1, backend2, prioritize_over):
     # Environment variable prioritization beats everything:
     if (prio := prioritize_over.get(backend1.name)) and backend2.name in prio:
         return 3
-    elif (prio := prioritize_over.get(backend2.name)) and backend1.name in prio:
+    if (prio := prioritize_over.get(backend2.name)) and backend1.name in prio:
         return -3
 
     # Sort by the backends compare function (i.e. type hierarchy and manual order).
@@ -97,9 +96,9 @@ def compare_backends(backend1, backend2, prioritize_over):
     cmp2 = backend2.compare_with_other(backend1)
     if cmp1 is NotImplemented and cmp2 is NotImplemented:
         return 0
-    elif cmp1 is NotImplemented:
+    if cmp1 is NotImplemented:
         return -cmp2
-    elif cmp2 is NotImplemented:
+    if cmp2 is NotImplemented:
         return cmp1
 
     if cmp1 == cmp2:
@@ -110,8 +109,7 @@ def compare_backends(backend1, backend2, prioritize_over):
         )
     if cmp1 > cmp2:
         return cmp1
-    else:
-        return -cmp2
+    return -cmp2
 
 
 def _modified_state(
@@ -138,7 +136,7 @@ def _modified_state(
         if b not in backend_system.backends:
             if unknown_backends == "raise":
                 raise ValueError(f"Backend '{b}' not found.")
-            elif unknown_backends == "ignore":
+            if unknown_backends == "ignore":
                 pass
             else:
                 raise ValueError("_modified_state() unknown_backends must be raise or ignore")
@@ -792,10 +790,9 @@ class _Implementation:
         _function = self._function
         if type(_function) is not str:
             return _function
-        else:
-            _function = from_identifier(_function)
-            self._function = _function
-            return _function
+        _function = from_identifier(_function)
+        self._function = _function
+        return _function
 
 
 class _Implentations(dict):
@@ -928,12 +925,11 @@ class Dispatchable:
         # Return all dispatch args
         if self._dispatch_args is None:
             return args + tuple(kwargs.values())
-        else:
-            return tuple(
-                val
-                for name, pos in self._dispatch_args.items()
-                if (val := args[pos] if pos < len(args) else kwargs.get(name)) is not None
-            )
+        return tuple(
+            val
+            for name, pos in self._dispatch_args.items()
+            if (val := args[pos] if pos < len(args) else kwargs.get(name)) is not None
+        )
 
     def __call__(self, *args, **kwargs):
         dispatch_args = tuple(self._get_dispatch_args(*args, **kwargs))
@@ -972,17 +968,16 @@ class Dispatchable:
 
                 if impl.uses_context:
                     return impl.function(context, *args, **kwargs)
-                else:
-                    return impl.function(*args, **kwargs)
+                return impl.function(*args, **kwargs)
 
-            elif should_run is not False:
+            if should_run is not False:
                 # Strict to allow future use as "should run if needed only".  That would merge
                 # "can" and "should" run.  I can see a dedicated `can_run`, but see it as more
                 # useful if `can_run` was passed only cachable parameters (e.g. `method="meth"`,
                 # or even `backend=`, although that would be special).
                 # (We may tag on a reason for a non-True return value as well or use context.)
                 raise NotImplementedError("Currently, should run must return True or False.")
-            elif trace is not None and impl.should_run is not None:
+            if trace is not None and impl.should_run is not None:
                 call_trace.append((name, "skipped due to should_run returning False"))
 
         if call_trace is not None:

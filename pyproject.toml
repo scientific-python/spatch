@@ -81,7 +81,7 @@ extend-select = [
   "PL",     # pylint
   "PT",     # flake8-pytest-style
   "PTH",    # flake8-use-pathlib
-  # "RET",  # flake8-return
+  "RET",    # flake8-return
   "RUF",    # Ruff-specific
   "SIM",    # flake8-simplify
   "TID251", # flake8-tidy-imports.banned-api
