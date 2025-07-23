@@ -75,15 +75,19 @@ repos:
       - id: ruff-check
   # `pyroma` may help keep our package standards up to date if best practices change.
   # This is probably a "low value" check though and safe to remove if we want faster pre-commit.
-  - repo: https://github.com/regebro/pyroma
-    rev: "5.0"
+  # - repo: https://github.com/regebro/pyroma
+  #   rev: "5.0"
+  #   hooks:
+  #     - id: pyroma
+  #       args: [-n, "9", .] # Need author email to score a 10
+  - repo: https://github.com/ComPWA/taplo-pre-commit
+    rev: v0.9.3
     hooks:
-      - id: pyroma
-        args: [-n, "9", .]  # Need author email to score a 10
+      - id: taplo-format
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
-      - id: no-commit-to-branch  # No commit directly to main
+      - id: no-commit-to-branch # No commit directly to main
   - repo: meta
     hooks:
       - id: check-hooks-apply

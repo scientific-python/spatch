@@ -4,9 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "spatch"
-authors = [
-    {name = "Scientific Python Developers"},
-]
+authors = [{ name = "Scientific Python Developers" }]
 dynamic = ["version"]
 description = "Coming soon: Python library for enabling dispatching to backends"
 readme = "README.md"
@@ -46,10 +44,7 @@ test = [
   "pytest-doctestplus",
   { include-group = "backend_utils" },
 ]
-dev = [
-  { include-group = "test" },
-  { include-group = "docs" },
-]
+dev = [{ include-group = "test" }, { include-group = "docs" }]
 docs = [
   "sphinx>=7.0",
   "sphinx-copybutton",
@@ -73,14 +68,12 @@ backend2 = 'spatch._spatch_example.entry_point2'
 [tool.pytest.ini_options]
 doctest_plus = "enabled"
 testpaths = [
-    "tests",
-    "src/spatch",  # for doc testing
-    "docs",
+  "tests",
+  "src/spatch", # for doc testing
+  "docs",
 ]
 norecursedirs = ["src"]
-addopts = [
-    "--doctest-glob=docs/source/**.md",
-]
+addopts = ["--doctest-glob=docs/source/**.md"]
 
 [tool.black]
 line-length = 100
@@ -208,8 +201,10 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"src/spatch/**/__init__.py" = ["F401"]  # Allow unused import (w/o defining `__all__`)
-"src/spatch/_spatch_example/backend.py" = ["T201"]  # Allow print
+"src/spatch/**/__init__.py" = [
+  "F401", # Allow unused import (w/o defining `__all__`)
+]
+"src/spatch/_spatch_example/backend.py" = ["T201"] # Allow print
 "docs/**/*.py" = ["INP001"] # Not a package
 "tests/*.py" = [
   "S101",   # Allow assert
