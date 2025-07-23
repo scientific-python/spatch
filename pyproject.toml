@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling", "hatch-vcs", "hatch-fancy-pypi-readme"]
+requires = ["hatchling >=1.26", "hatch-vcs", "hatch-fancy-pypi-readme"]
 build-backend = "hatchling.build"
 
 [project]
@@ -44,12 +44,16 @@ test = [
   "pytest-doctestplus",
   { include-group = "backend_utils" },
 ]
-dev = [{ include-group = "test" }, { include-group = "docs" }]
+dev = [
+  "pre-commit >=4.1",
+  { include-group = "test" },
+  { include-group = "docs" },
+]
 docs = [
-  "sphinx>=7.0",
+  "sphinx >=7.0",
   "sphinx-copybutton",
   "pydata-sphinx-theme",
-  "myst-parser",
+  "myst-parser >=0.13",
 ]
 
 [tool.hatch.version]
