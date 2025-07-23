@@ -1,7 +1,9 @@
 from importlib import import_module
+from importlib.metadata import version
 from dataclasses import dataclass, field
 import re
 import sys
+import warnings
 
 
 def get_identifier(obj):
@@ -15,6 +17,57 @@ def from_identifier(ident):
     for name in qualname.split("."):
         obj = getattr(obj, name)
     return obj
+
+
+def get_project_version(project_name, *, action_if_not_found="warn", default=None):
+    """Get the version of a project from ``importlib.metadata``.
+
+    This is useful to ensure a package is properly installed regardless of the
+    tools used to build the project and create the version. Proper installation
+    is important to ensure entry-points of the project are discoverable. If the
+    project is not found by ``importlib.metadata``, behavior is controlled by
+    the ``action_if_not_found`` and ``default`` keyword arguments.
+
+    Parameters
+    ----------
+    project_name : str
+        The name of the project of a package. For example, this is given by the
+        ``[project.name]`` metadata in the pyproject.toml file. This is often,
+        but not necessarily, the same as the package name.
+    action_if_not_found : {"ignore", "warn", "raise"}
+        What action to take if project metadata is not found by importlib:
+        "ignore" to return the default value, "warn" to emit a warning and
+        return the default value, and "raise" to raise a ModuleNotFoundError.
+        Default is "warn".
+    default : str or None, optional
+        The default version to return if project metadata is not found.
+        Default is None.
+    """
+    if action_if_not_found not in {"ignore", "warn", "raise"}:
+        raise ValueError(
+            "`action=` keyword must be 'ignore', 'warn', or 'raise'; "
+            f"got: {action_if_not_found!r}."
+        )
+    try:
+        project_version = version(project_name)
+    except ModuleNotFoundError as exc:
+        project_version = default
+        if action_if_not_found == "warn":
+            behavior = f", so the version will be set to {default!r}"
+        else:
+            behavior = ""
+        msg = (
+            f"No version metadata found for {project_name}{behavior}. This "
+            f"may mean that {project_name} was incorrectly installed or not "
+            "installed at all. For local development, consider doing an "
+            "editable install via `python -m pip install -e .` from within "
+            f"the root `{project_name}/` repository folder."
+        )
+        if action_if_not_found == "warn":
+            warnings.warn(msg, RuntimeWarning, stacklevel=2)
+        elif action_if_not_found == "raise":
+            raise ModuleNotFoundError(msg) from exc
+    return project_version
 
 
 # Valid recommended entry point name, but we could allow more, see:

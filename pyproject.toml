@@ -7,7 +7,7 @@ name = "spatch"
 authors = [
     {name = "Scientific Python Developers"},
 ]
-version = "0.0.0"
+dynamic = ["version"]
 description = "Coming soon"
 readme = "README.md"
 license = "BSD-3-Clause"
@@ -33,6 +33,9 @@ docs = [
   "pydata-sphinx-theme",
   "myst-parser",
 ]
+
+[tool.hatch.version]
+source = "vcs"
 
 [tool.hatch.metadata.hooks.fancy-pypi-readme]
 content-type = "text/markdown"
