@@ -84,6 +84,10 @@ repos:
     rev: v0.9.3
     hooks:
       - id: taplo-format
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.37.1
+    hooks:
+      - id: yamllint
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
