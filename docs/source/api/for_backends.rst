@@ -26,7 +26,7 @@ Before writing a backend, you need to think about a few things:
   by the user.
 
 Please check the example linked above.  These example entry-points include
-code that means running them modifies them in-place if the `@implements`
+code that means running them modifies them in-place if the ``@implements``
 decorator is used (see next section).
 
 Some of the most important things are:

@@ -84,6 +84,11 @@ repos:
     rev: v3.6.2
     hooks:
       - id: prettier
+  - repo: https://github.com/sphinx-contrib/sphinx-lint
+    rev: v1.0.0
+    hooks:
+      - id: sphinx-lint
+        args: [--enable, all, "--disable=line-too-long,leaked-markup"]
   - repo: https://github.com/ComPWA/taplo-pre-commit
     rev: v0.9.3
     hooks:
