@@ -237,4 +237,4 @@ def update_entrypoint(
     # Step 4: replace text
     text = Path(filepath).read_text()
     text = update_text(text, lines, "functions", indent=indent)
-   Path(filepath).write_text(text)
+    Path(filepath).write_text(text)
