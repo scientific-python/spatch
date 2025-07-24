@@ -568,9 +568,8 @@ class BackendSystem:
             del _visiting[node]
             order[node] = None  # add sorted node
 
-        # to_sort = list(graph.keys())  # @eriknw to @seberg: should this be used?
         order = {}  # dict as a sorted set
-        for n in list(graph.keys()):
+        for n in graph:
             visit(n, order, {})
 
         return tuple(order.keys())
