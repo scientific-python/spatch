@@ -26,7 +26,7 @@ Before writing a backend, you need to think about a few things:
   by the user.
 
 Please check the example linked above.  These example entry-points include
-code that means running them modifies them in-place if the `@implements`
+code that means running them modifies them in-place if the ``@implements``
 decorator is used (see next section).
 
 Some of the most important things are:
@@ -94,7 +94,7 @@ The following fields are supported for each function:
 
 - ``function``: The implementation to dispatch to.
 - ``should_run`` (optional): A function that gets all inputs (and context)
-  and can decide to defer.  Unless you know things will error, try to make sure 
+  and can decide to defer.  Unless you know things will error, try to make sure
   that this function is light-weight.
 - ``uses_context``: Whether the implementation needs a ``DispatchContext``.
 - ``additional_docs`` (optional): Brief text to add to the documentation

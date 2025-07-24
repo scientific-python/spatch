@@ -1,5 +1,6 @@
-from dataclasses import dataclass
 from collections.abc import Callable
+from dataclasses import dataclass
+from pathlib import Path
 
 from .utils import from_identifier, get_identifier
 
@@ -20,8 +21,7 @@ class BackendImplementation:
     impl_to_info: dict[str, BackendFunctionInfo]
 
     def __init__(self, backend_name: str):
-        """Helper class to create backends.
-        """
+        """Helper class to create backends."""
         self.name = backend_name
         self.api_to_info = {}  # {api_identity_string: backend_function_info}
         self.impl_to_info = {}  # {impl_identity_string: backend_function_info}
@@ -120,7 +120,7 @@ class BackendImplementation:
 
         def inner(func: Callable):
             identity = get_identifier(func)
-            if identity.endswith(":<lambda>") or identity.endswith(":_"):
+            if identity.endswith((":<lambda>", ":_")):
                 backend_func._should_run = func
                 identity = f"{impl_identity}._should_run"
             info = self.impl_to_info[impl_identity]
@@ -163,7 +163,7 @@ class MultiLineString:
         return "\n".join(
             [
                 "(",
-                *(repr(line + '\n') for line in self.lines[:-1]),
+                *(repr(line + "\n") for line in self.lines[:-1]),
                 repr(self.lines[-1]),
                 ")",
             ]
@@ -235,8 +235,6 @@ def update_entrypoint(
     ]
 
     # Step 4: replace text
-    with open(filepath) as f:
-        text = f.read()
+    text = Path(filepath).read_text()
     text = update_text(text, lines, "functions", indent=indent)
-    with open(filepath, "w") as f:
-        f.write(text)
+    Path(filepath).write_text(text)

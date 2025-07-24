@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       deploy:
-        description: 'Publish docs?'
+        description: "Publish docs?"
         required: true
         type: boolean
 
@@ -32,6 +32,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - uses: actions/setup-python@v5
         with:
@@ -58,8 +59,8 @@ jobs:
     if: inputs.deploy
 
     permissions:
-      pages: write      # to deploy to Pages
-      id-token: write   # to verify the deployment originates from an appropriate source
+      pages: write # to deploy to Pages
+      id-token: write # to verify the deployment originates from an appropriate source
 
     # Deploy to the github-pages environment
     environment:

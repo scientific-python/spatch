@@ -1,18 +1,39 @@
 [build-system]
-requires = ["hatchling", "hatch-vcs", "hatch-fancy-pypi-readme"]
+requires = ["hatchling >=1.26", "hatch-vcs", "hatch-fancy-pypi-readme"]
 build-backend = "hatchling.build"
 
 [project]
 name = "spatch"
-authors = [
-    {name = "Scientific Python Developers"},
-]
+authors = [{ name = "Scientific Python Developers" }]
 dynamic = ["version"]
-description = "Coming soon"
+description = "Coming soon: Python library for enabling dispatching to backends"
 readme = "README.md"
 license = "BSD-3-Clause"
 requires-python = ">=3.10"
 dependencies = ["importlib_metadata"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Science/Research",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3 :: Only",
+  "Topic :: Scientific/Engineering",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+]
+keywords = ["dispatching"]
+
+[project.urls]
+homepage = "https://github.com/scientific-python/spatch"
+documentation = "https://scientific-python.github.io/spatch"
+source = "https://github.com/scientific-python/spatch"
+changelog = "https://github.com/scientific-python/spatch/releases"
 
 [dependency-groups]
 # black is used to format entry-point files
@@ -24,14 +45,15 @@ test = [
   { include-group = "backend_utils" },
 ]
 dev = [
+  "pre-commit >=4.1",
   { include-group = "test" },
   { include-group = "docs" },
 ]
 docs = [
-  "sphinx>=7.0",
+  "sphinx >=7.0",
   "sphinx-copybutton",
   "pydata-sphinx-theme",
-  "myst-parser",
+  "myst-parser >=0.13",
 ]
 
 [tool.hatch.version]
@@ -48,16 +70,168 @@ backend1 = 'spatch._spatch_example.entry_point'
 backend2 = 'spatch._spatch_example.entry_point2'
 
 [tool.pytest.ini_options]
+minversion = "6.0"
 doctest_plus = "enabled"
 testpaths = [
-    "tests",
-    "src/spatch",  # for doc testing
-    "docs",
+  "tests",
+  "src/spatch", # for doc testing
+  "docs",
 ]
+xfail_strict = true
 norecursedirs = ["src"]
 addopts = [
-    "--doctest-glob=docs/source/**.md",
+  "--doctest-glob=docs/source/**.md",
+  "--strict-config",                  # Force error if config is misspelled
+  "--strict-markers",                 # Force error if marker is misspelled (must be defined in config)
+  "-ra",                              # Print summary of all fails/errors
 ]
+log_cli_level = "info"
+filterwarnings = ["error"]
+
+[tool.black]
+line-length = 100
+target-version = ["py310", "py311", "py312", "py313"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+extend-select = [
+  # Defaults from https://github.com/scientific-python/cookie excluding ARG and EM
+  "B",   # flake8-bugbear
+  "C4",  # flake8-comprehensions
+  "EXE", # flake8-executable
+  "G",   # flake8-logging-format
+  "I",   # isort
+  "ICN", # flake8-import-conventions
+  "NPY", # NumPy-specific rules
+  "PGH", # pygrep-hooks
+  "PIE", # flake8-pie
+  "PL",  # pylint
+  "PT",  # flake8-pytest-style
+  "PTH", # flake8-use-pathlib
+  "RET", # flake8-return
+  "RUF", # Ruff-specific
+  "SIM", # flake8-simplify
+  "T20", # flake8-print
+  "UP",  # pyupgrade
+  "YTT", # flake8-2020
+
+  # Additional ones (may be unnecessary, low value, or a nuisance).
+  # It's okay to experiment and add or remove checks from here
+  "S",   # bandit
+  "A",   # flake8-builtins
+  "COM", # flake8-commas
+  "DTZ", # flake8-datetimez
+  "T10", # flake8-debugger
+  "ISC", # flake8-implicit-str-concat
+  "INP", # flake8-no-pep420
+  "Q",   # flake8-quotes
+  "RSE", # flake8-raise
+  "N",   # pep8-naming
+  "PLC", # pylint Convention
+  "PLE", # pylint Error
+  "PLR", # pylint Refactor
+  "PLW", # pylint Warning
+  "E",   # pycodestyle Error
+  "W",   # pycodestyle Warning
+  "F",   # pyflakes
+  "TRY", # tryceratops
+
+  # Maybe consider
+  # "EM",  # flake8-errmsg (Perhaps nicer, but it's a lot of work)
+  # "ALL", # to see everything!
+]
+unfixable = [
+  "F841", # unused-variable (Note: can leave useless expression)
+  "B905", # zip-without-explicit-strict (Note: prefer `zip(x, y, strict=True)`)
+]
+ignore = [
+  # Maybe consider
+  "ANN",     # flake8-annotations (We don't fully use annotations yet)
+  "B904",    # Use `raise from` to specify exception cause (Note: sometimes okay to raise original exception)
+  "PERF401", # Use a list comprehension to create a transformed list (Note: poorly implemented atm)
+  "RUF012",  # Mutable class attributes should be annotated with `typing.ClassVar` (Note: no annotations yet)
+  "RUF021",  # parenthesize-chained-operators (Note: results don't look good yet)
+  "RUF023",  # unsorted-dunder-slots (Note: maybe fine, but noisy changes)
+  "S310",    # Audit URL open for permitted schemes (Note: we don't download URLs in normal usage)
+  "TRY004",  # Prefer `TypeError` exception for invalid type (Note: good advice, but not worth the nuisance)
+  "TRY301",  # Abstract `raise` to an inner function
+
+  # Intentionally ignored
+  "B019",    # Use of `functools.lru_cache` or `functools.cache` on methods can lead to memory leaks
+  "COM812",  # Trailing comma missing
+  "D203",    # 1 blank line required before class docstring (Note: conflicts with D211, which is preferred)
+  "D213",    # (Note: conflicts with D212, which is preferred)
+  "D400",    # First line should end with a period (Note: prefer D415, which also allows "?" and "!")
+  "N801",    # Class name ... should use CapWords convention (Note:we have a few exceptions to this)
+  "N802",    # Function name ... should be lowercase
+  "N803",    # Argument name ... should be lowercase (Maybe okay--except in tests)
+  "N806",    # Variable ... in function should be lowercase
+  "N807",    # Function name should not start and end with `__`
+  "N818",    # Exception name ... should be named with an Error suffix (Note: good advice)
+  "PERF203", # `try`-`except` within a loop incurs performance overhead (Note: too strict)
+  "PLC0205", # Class `__slots__` should be a non-string iterable (Note: string is fine)
+  "PLC0415", # `import` should be at the top-level of a file (Note: good advice, too strict)
+  "PLR0124", # Name compared with itself, consider replacing `x == x` (Note: too strict)
+  "PLR0911", # Too many return statements
+  "PLR0912", # Too many branches
+  "PLR0913", # Too many arguments to function call
+  "PLR0915", # Too many statements
+  "PLR2004", # Magic number used in comparison, consider replacing magic with a constant variable
+  "PLW0603", # Using the global statement to update ... is discouraged (Note: yeah, discouraged, but too strict)
+  "PLW0642", # Reassigned `self` variable in instance method (Note: too strict for us)
+  "PLW2901", # Outer for loop variable ... overwritten by inner assignment target (Note: good advice, but too strict)
+  "RET502",  # Do not implicitly `return None` in function able to return non-`None` value
+  "RET503",  # Missing explicit `return` at the end of function able to return non-`None` value
+  "RET504",  # Unnecessary variable assignment before `return` statement
+  "RUF018",  # Avoid assignment expressions in `assert` statements
+  "S110",    # `try`-`except`-`pass` detected, consider logging the exception (Note: good advice, but we don't log)
+  "S112",    # `try`-`except`-`continue` detected, consider logging the exception (Note: good advice, but we don't log)
+  "S603",    # `subprocess` call: check for execution of untrusted input (Note: not important for us)
+  "S607",    # Starting a process with a partial executable path (Note: not important for us)
+  "SIM102",  # Use a single `if` statement instead of nested `if` statements (Note: often necessary)
+  "SIM105",  # Use contextlib.suppress(...) instead of try-except-pass (Note: try-except-pass is much faster)
+  "SIM108",  # Use ternary operator ... instead of if-else-block (Note: if-else better for coverage and sometimes clearer)
+  "TID251",  # flake8-tidy-imports.banned-api
+  "TRY003",  # Avoid specifying long messages outside the exception class (Note: why?)
+  "UP038",   # Use `X | Y` in `isinstance` call instead of `(X, Y)` (Note: using `|` is slower atm)
+
+  # Ignored categories
+  "C90", # mccabe (Too strict, but maybe we should make things less complex)
+  "BLE", # flake8-blind-except (Maybe consider)
+  "FBT", # flake8-boolean-trap (Why?)
+  "DJ",  # flake8-django (We don't use django)
+  "PYI", # flake8-pyi (We don't have stub files yet)
+  "SLF", # flake8-self (We can use our own private variables--sheesh!)
+  "TCH", # flake8-type-checking (Note: figure out type checking later)
+  "ARG", # flake8-unused-arguments (Sometimes helpful, but too strict)
+  "TD",  # flake8-todos (Maybe okay to add some of these)
+  "FIX", # flake8-fixme (like flake8-todos)
+  "ERA", # eradicate (We like code in comments!)
+  "PD",  # pandas-vet (Intended for scripts that use pandas, not libraries)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"src/spatch/**/__init__.py" = [
+  "F401", # Allow unused import (w/o defining `__all__`)
+]
+"src/spatch/_spatch_example/backend.py" = ["T201"] # Allow print
+"docs/**/*.py" = ["INP001"] # Not a package
+"tests/*.py" = [
+  "S101",   # Allow assert
+  "INP001", # Not a package
+]
+
+[tool.ruff.lint.flake8-builtins]
+builtins-ignorelist = ["copyright", "type"]
+
+[tool.ruff.lint.flake8-pytest-style]
+fixture-parentheses = false
+mark-parentheses = false
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
 
 [tool.coverage]
 run.source = ["spatch"]

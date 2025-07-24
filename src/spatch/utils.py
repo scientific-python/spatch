@@ -1,9 +1,10 @@
-from importlib import import_module
-from importlib.metadata import version
-from dataclasses import dataclass, field
 import re
 import sys
 import warnings
+from dataclasses import dataclass, field
+from importlib import import_module
+
+from importlib_metadata import version
 
 
 def get_identifier(obj):
@@ -20,12 +21,12 @@ def from_identifier(ident):
 
 
 def get_project_version(project_name, *, action_if_not_found="warn", default=None):
-    """Get the version of a project from ``importlib.metadata``.
+    """Get the version of a project from ``importlib_metadata``.
 
     This is useful to ensure a package is properly installed regardless of the
     tools used to build the project and create the version. Proper installation
     is important to ensure entry-points of the project are discoverable. If the
-    project is not found by ``importlib.metadata``, behavior is controlled by
+    project is not found by ``importlib_metadata``, behavior is controlled by
     the ``action_if_not_found`` and ``default`` keyword arguments.
 
     Parameters
@@ -45,8 +46,7 @@ def get_project_version(project_name, *, action_if_not_found="warn", default=Non
     """
     if action_if_not_found not in {"ignore", "warn", "raise"}:
         raise ValueError(
-            "`action=` keyword must be 'ignore', 'warn', or 'raise'; "
-            f"got: {action_if_not_found!r}."
+            f"`action=` keyword must be 'ignore', 'warn', or 'raise'; got: {action_if_not_found!r}."
         )
     try:
         project_version = version(project_name)
@@ -114,7 +114,7 @@ class _TypeInfo:
             return False
 
         if not self.is_abstract and self.module not in sys.modules:
-            # If this isn't an abstract type there can't be sublasses unless
+            # If this isn't an abstract type there can't be subclasses unless
             # the module was already imported.
             return False
 
@@ -140,12 +140,13 @@ class TypeIdentifier:
     (In principle we could also walk the ``__mro__`` of the type we check
     and see if we find the superclass by name matching.)
     """
+
     def __init__(self, identifiers):
         self.identifiers = tuple(identifiers)
         # Fill in type information for later use, sort by identifier (without ~ or @)
-        self._type_infos = tuple(sorted(
-            (_TypeInfo(ident) for ident in identifiers), key=lambda ti: ti.identifier
-        ))
+        self._type_infos = tuple(
+            sorted((_TypeInfo(ident) for ident in identifiers), key=lambda ti: ti.identifier)
+        )
         self.is_abstract = any(info.is_abstract for info in self._type_infos)
         self._idents = frozenset(ti.identifier for ti in self._type_infos)
 
@@ -171,7 +172,7 @@ class TypeIdentifier:
                 # We have the same identifier, check if other represents
                 # subclasses of this.
                 any_subclass = False
-                for self_ti, other_ti in zip(self._type_infos, other._type_infos):
+                for self_ti, other_ti in zip(self._type_infos, other._type_infos, strict=True):
                     if self_ti.allow_subclasses == other_ti.allow_subclasses:
                         continue
                     if self_ti.allow_subclasses and not other_ti.allow_subclasses:
@@ -192,8 +193,10 @@ class TypeIdentifier:
         return any(ti.matches(type) for ti in self._type_infos)
 
     def __or__(self, other):
-        """Union of two sets of type identifiers.
-        """
+        """Union of two sets of type identifiers."""
         if not isinstance(other, TypeIdentifier):
             return NotImplemented
         return TypeIdentifier(set(self.identifiers + other.identifiers))
+
+
+EMPTY_TYPE_IDENTIFIER = TypeIdentifier([])

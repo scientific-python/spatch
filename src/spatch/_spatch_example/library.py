@@ -1,14 +1,14 @@
-
 from spatch.backend_system import BackendSystem
 
 _backend_system = BackendSystem(
     "_spatch_example_backends",  # entry point group
     "_SPATCH_EXAMPLE_BACKENDS",  # environment variable prefix
-    default_primary_types=["builtins:int"]
+    default_primary_types=["builtins:int"],
 )
 
 
 backend_opts = _backend_system.backend_opts
+
 
 @_backend_system.dispatchable(["x", "y"])
 def divide(x, y):

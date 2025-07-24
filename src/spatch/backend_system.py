@@ -1,19 +1,19 @@
-import contextlib
 import contextvars
 import dataclasses
-from dataclasses import dataclass
 import functools
 import os
-import importlib_metadata
-import warnings
 import sys
 import textwrap
+import warnings
+from collections.abc import Callable
+from dataclasses import dataclass
 from types import MethodType
-from typing import Any, Callable
+from typing import Any
+
+import importlib_metadata
 
 from spatch import from_identifier, get_identifier
-from spatch.utils import TypeIdentifier, valid_backend_name
-
+from spatch.utils import EMPTY_TYPE_IDENTIFIER, TypeIdentifier, valid_backend_name
 
 __doctest_skip__ = ["BackendOpts.__init__"]
 
@@ -21,9 +21,9 @@ __doctest_skip__ = ["BackendOpts.__init__"]
 @dataclass(slots=True)
 class Backend:
     name: str
-    primary_types: TypeIdentifier = TypeIdentifier([])
-    secondary_types: TypeIdentifier = TypeIdentifier([])
-    functions : dict = dataclasses.field(default_factory=dict)
+    primary_types: TypeIdentifier = EMPTY_TYPE_IDENTIFIER
+    secondary_types: TypeIdentifier = EMPTY_TYPE_IDENTIFIER
+    functions: dict = dataclasses.field(default_factory=dict)
     known_backends: frozenset = frozenset()
     higher_priority_than: frozenset = frozenset()
     lower_priority_than: frozenset = frozenset()
@@ -54,22 +54,19 @@ class Backend:
     def known_type(self, dispatch_type):
         if dispatch_type in self.primary_types:
             return "primary"  # TODO: maybe make it an enum?
-        elif dispatch_type in self.secondary_types:
+        if dispatch_type in self.secondary_types:
             return "secondary"
-        else:
-            return False
+        return False
 
     def matches(self, dispatch_types):
         matches = frozenset(self.known_type(t) for t in dispatch_types)
-        if "primary" in matches and False not in matches:
-            return True
-        return False
+        return "primary" in matches and False not in matches
 
     def compare_with_other(self, other):
         # NOTE: This function is a symmetric comparison
         if other.name in self.higher_priority_than:
             return 2
-        elif other.name in self.lower_priority_than:
+        if other.name in self.lower_priority_than:
             return -2
 
         # If our primary types are a subset of the other, we match more
@@ -87,30 +84,30 @@ def compare_backends(backend1, backend2, prioritize_over):
     # Environment variable prioritization beats everything:
     if (prio := prioritize_over.get(backend1.name)) and backend2.name in prio:
         return 3
-    elif (prio := prioritize_over.get(backend2.name)) and backend1.name in prio:
+    if (prio := prioritize_over.get(backend2.name)) and backend1.name in prio:
         return -3
 
     # Sort by the backends compare function (i.e. type hierarchy and manual order).
     # We default to a type based comparisons but allow overriding this, so check
-    # both ways (to find the overriding).  This also find inconcistencies.
+    # both ways (to find the overriding).  This also find inconsistencies.
     cmp1 = backend1.compare_with_other(backend2)
     cmp2 = backend2.compare_with_other(backend1)
     if cmp1 is NotImplemented and cmp2 is NotImplemented:
         return 0
-    elif cmp1 is NotImplemented:
+    if cmp1 is NotImplemented:
         return -cmp2
-    elif cmp2 is NotImplemented:
+    if cmp2 is NotImplemented:
         return cmp1
 
     if cmp1 == cmp2:
         raise RuntimeError(
             "Backends {backend1.name} and {backend2.name} report inconsistent "
             "priorities (this means they are buggy).  You can manually set "
-            "a priority or remove one of the backends.")
+            "a priority or remove one of the backends."
+        )
     if cmp1 > cmp2:
         return cmp1
-    else:
-        return -cmp2
+    return -cmp2
 
 
 def _modified_state(
@@ -137,17 +134,16 @@ def _modified_state(
         if b not in backend_system.backends:
             if unknown_backends == "raise":
                 raise ValueError(f"Backend '{b}' not found.")
-            elif unknown_backends == "ignore":
+            if unknown_backends == "ignore":
                 pass
             else:
-                raise ValueError(
-                    "_modified_state() unknown_backends must be raise or ignore")
+                raise ValueError("_modified_state() unknown_backends must be raise or ignore")
 
-    if type is not None:
-        if not backend_system.known_type(type, primary=True):
-            raise ValueError(
-                f"Type '{type}' not a valid primary type of any backend. "
-                "It is impossible to enforce use of this type for any function.")
+    if type is not None and not backend_system.known_type(type, primary=True):
+        raise ValueError(
+            f"Type '{type}' not a valid primary type of any backend. "
+            "It is impossible to enforce use of this type for any function."
+        )
 
     ordered_backends, _, prioritized, curr_trace = curr_state
     prioritized = prioritized | frozenset(prioritize)
@@ -233,7 +229,7 @@ class BackendOpts:
         type
             The type to dispatch for within this context.
         trace
-            The trace object (currenly a list as described in the examples).
+            The trace object (currently a list as described in the examples).
             If used, the trace is also returned when entering the context.
 
         Notes
@@ -279,7 +275,7 @@ class BackendOpts:
         Backends should simply document their behavior with ``backend_opts`` and
         which usage pattern they see for their users.
 
-        Tracing calls can be done using, where ``trace`` is a list of informations for
+        Tracing calls can be done using, where ``trace`` is a list of information for
         each call.  This contains a tuple of the function identifier and a list of
         backends called (typically exactly one, but it will also note if a backend deferred
         via ``should_run``).
@@ -291,7 +287,11 @@ class BackendOpts:
         self._state = _modified_state(
             self._backend_system,
             self._dispatch_state.get(),
-            prioritize=prioritize, disable=disable, type=type, trace=trace)
+            prioritize=prioritize,
+            disable=disable,
+            type=type,
+            trace=trace,
+        )
         # unpack new state to provide information:
         self.backends, self.prioritized, self.type, self.trace = self._state
         self._token = None
@@ -300,13 +300,14 @@ class BackendOpts:
         # We could allow a repr that can be copy pasted, but this seems more clear?
         inactive = tuple(b for b in self._backend_system.backends if b not in self.backends)
         type_str = "    type: {tuple(self.type)[0]!r}\n" if self.type else ""
-        return (f"<Backend options:\n"
-                f"   active: {self.backends}\n"
-                f"   inactive: {inactive}\n"
-                f"{type_str}"
-                f"   tracing: {self.trace is not None}\n"
-                f">"
-            )
+        return (
+            f"<Backend options:\n"
+            f"   active: {self.backends}\n"
+            f"   inactive: {inactive}\n"
+            f"{type_str}"
+            f"   tracing: {self.trace is not None}\n"
+            f">"
+        )
 
     def enable_globally(self):
         """Apply these backend options globally.
@@ -317,18 +318,19 @@ class BackendOpts:
         is safer to use the contextmanager ``with`` statement instead.
 
         This method will issue a warning if the
-        dispatching state has been previously modified programatically.
+        dispatching state has been previously modified programmatically.
         """
         curr_state = self._dispatch_state.get(None)  # None used before default
         # If the state was never set or the state matches (ignoring trace)
         # and there was no trace registered before this is OK. Otherwise warn.
         if curr_state is not None and (
-                curr_state[:-1] != self._state[:-1]
-                or curr_state[-1] is not None):
+            curr_state[:-1] != self._state[:-1] or curr_state[-1] is not None
+        ):
             warnings.warn(
                 "Backend options were previously modified, global change of the "
                 "backends state should only be done once from the main program.",
-                UserWarning, 2
+                UserWarning,
+                2,
             )
         self._token = self._dispatch_state.set(self._state)
 
@@ -374,6 +376,7 @@ class BackendOpts:
         func : callable
             The decorated function.
         """
+
         # In this form, allow entering multiple times by storing the token
         # inside the wrapper functions locals
         @functools.wraps(func)
@@ -427,8 +430,7 @@ class BackendSystem:
         self.backends = {}
         if default_primary_types is not None:
             self.backends["default"] = Backend(
-                name="default",
-                primary_types=TypeIdentifier(default_primary_types)
+                name="default", primary_types=TypeIdentifier(default_primary_types)
             )
 
         try:
@@ -442,12 +444,14 @@ class BackendSystem:
                     raise ValueError(
                         f"Invalid order with duplicate backend in environment "
                         f"variable {environ_prefix}_SET_ORDER:\n"
-                        f"    {orders_str}")
+                        f"    {orders_str}"
+                    )
                 prev_b = None
                 for b in orders:
                     if not valid_backend_name(b):
                         raise ValueError(
-                            f"Name {b!r} in {environ_prefix}_SET_ORDER is not a valid backend name.")
+                            f"Name {b!r} in {environ_prefix}_SET_ORDER is not a valid backend name."
+                        )
                     if prev_b is not None:
                         prioritize_over.setdefault(prev_b, set()).add(b)
                         # If an opposite prioritization was already set, discard it.
@@ -459,7 +463,8 @@ class BackendSystem:
             warnings.warn(
                 f"Ignoring invalid environment variable {environ_prefix}_SET_ORDER "
                 f"due to error: {e}",
-                UserWarning, 2
+                UserWarning,
+                2,
             )
 
         try:
@@ -468,12 +473,14 @@ class BackendSystem:
             for b in prioritize:
                 if not valid_backend_name(b):
                     raise ValueError(
-                        f"Name {b!r} in {environ_prefix}_PRIORITIZE is not a valid backend name.")
+                        f"Name {b!r} in {environ_prefix}_PRIORITIZE is not a valid backend name."
+                    )
         except Exception as e:
             warnings.warn(
                 f"Ignoring invalid environment variable {environ_prefix}_PRIORITIZE "
                 f"due to error: {e}",
-                UserWarning, 2
+                UserWarning,
+                2,
             )
 
         try:
@@ -482,13 +489,16 @@ class BackendSystem:
             for b in blocked:
                 if not b.isidentifier():
                     raise ValueError(
-                        f"Name {b!r} in {environ_prefix}_PRIORITIZE is not a valid backend name.")
+                        f"Name {b!r} in {environ_prefix}_PRIORITIZE is not a valid backend name."
+                    )
         except Exception as e:
             warnings.warn(
                 f"Ignoring invalid environment variable {environ_prefix}_SET_ORDER "
                 f"due to error: {e}",
-                UserWarning, 2
+                UserWarning,
+                2,
             )
+        self._environ_prefix = environ_prefix
 
         # Note that the order of adding backends matters, we add `backends` first
         # and then entry point ones in alphabetical order.
@@ -500,10 +510,7 @@ class BackendSystem:
             try:
                 self.backend_from_namespace(backend)
             except Exception as e:
-                warnings.warn(
-                    f"Skipping backend {backend.name} due to error: {e}",
-                    UserWarning, 2
-                )
+                warnings.warn(f"Skipping backend {backend.name} due to error: {e}", UserWarning, 2)
 
         # Create a directed graph for which backends have a known higher priority than others.
         # The topological sorter is stable with respect to the original order, so we add
@@ -515,7 +522,7 @@ class BackendSystem:
 
         backends = [self.backends[n] for n in graph]
         for i, b1 in enumerate(backends):
-            for b2 in backends[i+1:]:
+            for b2 in backends[i + 1 :]:
                 cmp = compare_backends(b1, b2, prioritize_over)
                 if cmp < 0:
                     graph[b1.name].append(b2.name)
@@ -526,32 +533,33 @@ class BackendSystem:
 
         # Finalize backends to be a dict sorted by priority.
         self.backends = {b: self.backends[b] for b in order}
-        # The state is the ordered (active) backends and the prefered type (None)
+        # The state is the ordered (active) backends and the preferred type (None)
         # and the trace (None as not tracing).
         base_state = (order, None, frozenset(), None)
         disable = {b.name for b in self.backends.values() if b.requires_opt_in}
         state = _modified_state(
-            self, base_state, prioritize=prioritize, disable=disable, unknown_backends="ignore")
-        self._dispatch_state = contextvars.ContextVar(
-            f"{group}.dispatch_state", default=state)
+            self, base_state, prioritize=prioritize, disable=disable, unknown_backends="ignore"
+        )
+        self._dispatch_state = contextvars.ContextVar(f"{group}.dispatch_state", default=state)
 
-    @staticmethod
-    def _toposort(graph):
+    def _toposort(self, graph):
         # Adapted from Wikipedia's depth-first pseudocode. We are not using graphlib,
         # because it doesn't preserve the original order correctly.
         # This depth-first approach does preserve it.
-        def visit(node, order, _visiting={}):
+        def visit(node, order, _visiting):
             if node in order:
                 return
             if node in _visiting:
-                cycle = (tuple(_visiting.keys()) + (node,))[::-1]
+                cycle = (*_visiting.keys(), node)[::-1]
                 raise RuntimeError(
                     f"Backends form a priority cycle.  This is a bug in a backend or your\n"
-                    f"environment settings. Check the environment variable {environ_prefix}_SET_ORDER\n"
+                    "environment settings. Check the environment variable "
+                    f"{self._environ_prefix}_SET_ORDER\n"
                     f"and change it for example to:\n"
-                    f"    {environ_prefix}_SET_ORDER=\"{cycle[-1]}>{cycle[-2]}\"\n"
+                    f'    {self._environ_prefix}_SET_ORDER="{cycle[-1]}>{cycle[-2]}"\n'
                     f"to break the offending cycle:\n"
-                    f"    {'>'.join(cycle)}") from None
+                    f"    {'>'.join(cycle)}"
+                ) from None
 
             _visiting[node] = None  # mark as visiting/in-progress
             for n in graph[node]:
@@ -560,10 +568,9 @@ class BackendSystem:
             del _visiting[node]
             order[node] = None  # add sorted node
 
-        to_sort = list(graph.keys())
         order = {}  # dict as a sorted set
-        for n in list(graph.keys()):
-            visit(n, order)
+        for n in graph:
+            visit(n, order, {})
 
         return tuple(order.keys())
 
@@ -584,22 +591,17 @@ class BackendSystem:
                 namespace = ep.load()
                 if ep.name != namespace.name:
                     raise RuntimeError(
-                        f"Entrypoint name {ep.name!r} and actual name {namespace.name!r} mismatch.")
+                        f"Entrypoint name {ep.name!r} and actual name {namespace.name!r} mismatch."
+                    )
                 backends.append(namespace)
             except Exception as e:
-                warnings.warn(
-                    f"Skipping backend {ep.name} due to error: {e}",
-                    UserWarning, 3
-                )
+                warnings.warn(f"Skipping backend {ep.name} due to error: {e}", UserWarning, 3)
 
         return sorted(backends, key=lambda x: x.name)
 
     @functools.lru_cache(maxsize=128)
     def known_type(self, dispatch_type, primary=False):
-        for backend in self.backends.values():
-            if backend.known_type(dispatch_type):
-                return True
-        return False
+        return any(backend.known_type(dispatch_type) for backend in self.backends.values())
 
     def get_known_unique_types(self, dispatch_types):
         # From a list of args, return only the set of dispatch types
@@ -636,7 +638,8 @@ class BackendSystem:
         if new_backend.name in self.backends:
             warnings.warn(
                 f"Backend of name '{new_backend.name}' already exists. Ignoring second!",
-                UserWarning, 3
+                UserWarning,
+                3,
             )
             return
         self.backends[new_backend.name] = new_backend
@@ -681,6 +684,7 @@ class BackendSystem:
         Unfortunately, changing the module can confuse some tools, so we may
         wish to change the behavior of actually overriding it.
         """
+
         def wrap_callable(func):
             # Overwrite original module (we use it later, could also pass it)
             if module is not None:
@@ -698,9 +702,9 @@ class BackendSystem:
     def backend_opts(self):
         """Property returning a :py:class:`BackendOpts` class specific to this library
         (tied to this backend system).
-        """        
+        """
         return type(
-            f"BackendOpts",
+            "BackendOpts",
             (BackendOpts,),
             {"_dispatch_state": self._dispatch_state, "_backend_system": self},
         )
@@ -749,6 +753,7 @@ class DispatchContext:
         to use this to decide that e.g. a NumPy array will be converted to a
         cupy array, but only if prioritized.
     """
+
     # The idea is for the context to be very light-weight so that specific
     # information should be properties (because most likely we will never need it).
     # This object can grow to provide more information to backends.
@@ -779,10 +784,9 @@ class _Implementation:
         _function = self._function
         if type(_function) is not str:
             return _function
-        else:
-            _function = from_identifier(_function)
-            self._function = _function
-            return _function
+        _function = from_identifier(_function)
+        self._function = _function
+        return _function
 
 
 class _Implentations(dict):
@@ -842,17 +846,15 @@ class Dispatchable:
             for i, p in enumerate(sig.parameters.values()):
                 if p.name not in dispatch_args:
                     continue
-                if (
-                        p.kind == inspect.Parameter.POSITIONAL_ONLY or
-                        p.kind == inspect.Parameter.POSITIONAL_OR_KEYWORD
-                ):
+                if p.kind in {p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD}:
                     # Accepting it as a keyword is irrelevant here (fails later)
                     new_dispatch_args[p.name] = i
-                elif p.kind == inspect.Parameter.KEYWORD_ONLY:
+                elif p.kind == p.KEYWORD_ONLY:
                     new_dispatch_args[p.name] = sys.maxsize
                 else:
                     raise TypeError(
-                        f"Parameter {p.name} is variable. Must use callable `dispatch_args`.")
+                        f"Parameter {p.name} is variable. Must use callable `dispatch_args`."
+                    )
 
             if len(dispatch_args) != len(new_dispatch_args):
                 not_found = set(dispatch_args) - set(new_dispatch_args)
@@ -887,7 +889,10 @@ class Dispatchable:
         # Create implementations, lazy loads should_run (and maybe more in the future).
         self._implementations = _Implentations(impl_infos)
         self._implementations["default"] = _Implementation(
-            "default", self._default_func, None, False,
+            "default",
+            self._default_func,
+            None,
+            False,
         )
 
         if not new_doc:
@@ -911,16 +916,16 @@ class Dispatchable:
         # Return all dispatch args
         if self._dispatch_args is None:
             return args + tuple(kwargs.values())
-        else:
-            return tuple(
-                val for name, pos in self._dispatch_args.items()
-                if (val := args[pos] if pos < len(args) else kwargs.get(name)) is not None
-            )
+        return tuple(
+            val
+            for name, pos in self._dispatch_args.items()
+            if (val := args[pos] if pos < len(args) else kwargs.get(name)) is not None
+        )
 
     def __call__(self, *args, **kwargs):
         dispatch_args = tuple(self._get_dispatch_args(*args, **kwargs))
         # At this point dispatch_types is not filtered for known types.
-        dispatch_types = set(type(val) for val in dispatch_args)
+        dispatch_types = {type(val) for val in dispatch_args}
         state = self._backend_system._dispatch_state.get()
         ordered_backends, type_, prioritized, trace = state
 
@@ -929,7 +934,8 @@ class Dispatchable:
         dispatch_types = frozenset(dispatch_types)
 
         dispatch_types, matching_backends = self._backend_system.get_types_and_backends(
-            dispatch_types, ordered_backends)
+            dispatch_types, ordered_backends
+        )
 
         if trace is not None:
             call_trace = []
@@ -953,17 +959,16 @@ class Dispatchable:
 
                 if impl.uses_context:
                     return impl.function(context, *args, **kwargs)
-                else:
-                    return impl.function(*args, **kwargs)
+                return impl.function(*args, **kwargs)
 
-            elif should_run is not False:
+            if should_run is not False:
                 # Strict to allow future use as "should run if needed only".  That would merge
                 # "can" and "should" run.  I can see a dedicated `can_run`, but see it as more
-                # useful if `can_run` was passed only cachable parameters (e.g. `method="meth"`,
+                # useful if `can_run` was passed only cacheable parameters (e.g. `method="meth"`,
                 # or even `backend=`, although that would be special).
                 # (We may tag on a reason for a non-True return value as well or use context.)
-                raise NotImplementedError(f"Currently, should run must return True or False.")
-            elif trace is not None and impl.should_run is not None:
+                raise NotImplementedError("Currently, should run must return True or False.")
+            if trace is not None and impl.should_run is not None:
                 call_trace.append((name, "skipped due to should_run returning False"))
 
         if call_trace is not None:

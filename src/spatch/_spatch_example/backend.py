@@ -1,6 +1,7 @@
 try:
     from spatch.backend_utils import BackendImplementation
 except ModuleNotFoundError:  # pragma: no cover
+
     class Noop:
         # No-operation/do nothing version of a BackendImplementation
         def __call__(self, *args, **kwargs):
@@ -15,9 +16,9 @@ from . import library
 backend1 = BackendImplementation("backend1")
 backend2 = BackendImplementation("backend2")
 
+
 # For backend 1
-@backend1.implements(
-    library.divide, uses_context=True, should_run=lambda info, x, y: True)
+@backend1.implements(library.divide, uses_context=True, should_run=lambda info, x, y: True)
 def divide(context, x, y):
     """This implementation works well on floats."""
     print("hello from backend 1")

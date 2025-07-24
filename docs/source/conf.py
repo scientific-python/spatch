@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-import importlib.metadata
-from typing import Any
+import importlib_metadata
 
 project = "spatch"
 copyright = "2025, Spatch authors"
 author = "Spatch authors"
-version = release = importlib.metadata.version("spatch")
+version = release = importlib_metadata.version("spatch")
 
 extensions = [
     "myst_parser",

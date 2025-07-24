@@ -1,5 +1,3 @@
-import pytest
-
 from spatch.backend_system import BackendSystem
 from spatch.testing import BackendDummy
 
@@ -17,7 +15,7 @@ def test_context_basic():
         None,
         environ_prefix="SPATCH_TEST",
         default_primary_types=("builtin:int",),
-        backends=[FloatWithContext()]
+        backends=[FloatWithContext()],
     )
 
     # Add a dummy dispatchable function that dispatches on all arguments.
@@ -25,20 +23,20 @@ def test_context_basic():
     def dummy_func(*args, **kwargs):
         return "fallback", args, kwargs
 
-    _, (ctx, *args), kwargs = dummy_func(1, 1.)
+    _, (ctx, *args), kwargs = dummy_func(1, 1.0)
     assert ctx.name == "FloatWithContext"
     assert set(ctx.types) == {int, float}
-    assert ctx.dispatch_args == (1, 1.)
+    assert ctx.dispatch_args == (1, 1.0)
     assert not ctx.prioritized
 
     class float_subclass(float):
         pass
 
     with bs.backend_opts(prioritize=("FloatWithContext",)):
-        _, (ctx, *args), kwargs = dummy_func(float_subclass(1.))
+        _, (ctx, *args), kwargs = dummy_func(float_subclass(1.0))
         assert ctx.name == "FloatWithContext"
         assert set(ctx.types) == {float_subclass}
-        assert ctx.dispatch_args == (float_subclass(1.),)
+        assert ctx.dispatch_args == (float_subclass(1.0),)
         assert ctx.prioritized
 
     with bs.backend_opts(type=float):
@@ -48,4 +46,3 @@ def test_context_basic():
         assert set(ctx.types) == {float}
         assert ctx.dispatch_args == ()
         assert not ctx.prioritized  # not prioritized "just" type enforced
-

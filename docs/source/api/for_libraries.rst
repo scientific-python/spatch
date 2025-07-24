@@ -16,4 +16,3 @@ API to create dispatchable functions
 .. autoclass:: spatch.backend_system.BackendSystem
     :class-doc-from: init
     :members: dispatchable, backend_opts
-
