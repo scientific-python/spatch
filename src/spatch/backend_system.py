@@ -822,11 +822,9 @@ class _Implentations(dict):
 
 class Dispatchable:
     # Dispatchable function object
-    #
-    # TODO: We may want to return a function just to be nice (not having a func was
-    # OK in NumPy for example, but has a few little stumbling blocks)
-    def __init__(self, backend_system, func, dispatch_args, ident=None):
-        functools.update_wrapper(self, func)
+
+    def __new__(cls, backend_system, func, dispatch_args, ident=None):
+        self = object.__new__(cls)
 
         self._backend_system = backend_system
         self._default_func = func
@@ -906,6 +904,31 @@ class Dispatchable:
             self.__doc__ = textwrap.dedent(func.__doc__) + new_doc
         else:
             self.__doc__ = None  # not our problem
+
+        # Return a function, not a class instance.
+        # This helps with type checkers, html docs, reprs, etc.
+        def new_func(*args, **kwargs):
+            return self(*args, **kwargs)
+
+        # Standard function-wrapping stuff (like `functools.update_wrapper`).
+        # Should we set attrs to `self` or just `new_func`?
+        new_func.__doc__ = self.__doc__
+        new_func.__name__ = self.__name__ = func.__name__
+        new_func.__module__ = self.__module__ = func.__module__
+        new_func.__qualname__ = self.__qualname__ = func.__qualname__
+        new_func.__defaults__ = self.__defaults__ = getattr(func, "__defaults__", None)
+        new_func.__kwdefaults__ = self.__kwdefaults__ = getattr(func, "__kwdefaults__", None)
+        new_func.__annotations__ = self.__annotations__ = getattr(func, "__annotations__", {})
+        new_func.__type_params__ = self.__type_params__ = getattr(func, "__type_params__", ())
+        new_func.__dict__.update(func.__dict__)
+        # self.__dict__.update(func.__dict__)  # Don't clobber self.__dict__; too risky!
+        self.__wrapped__ = func
+        new_func.__wrapped__ = self
+
+        # As we add more public API to dispatchable functions, set them on `new_func` here
+        # such as `new_func.invoke = self.invoke`.
+
+        return new_func
 
     def __get__(self, obj, objtype=None):
         if obj is None:
