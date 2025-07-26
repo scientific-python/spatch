@@ -1,3 +1,5 @@
+import types
+
 import pytest
 
 from spatch.backend_system import BackendSystem
@@ -135,3 +137,7 @@ def test_opts_context_basic(bs):
             assert bs.backend_opts().backends == ("IntB", "RealB", "IntB2", "IntSubB", "FloatB")
 
             assert bs.dummy_func(1) == ("IntB", (1,), {})
+
+
+def test_dispatchable_is_function(bs):
+    assert isinstance(bs.dummy_func, types.FunctionType)
