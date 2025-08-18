@@ -31,11 +31,13 @@ decorator is used (see next section).
 
 Some of the most important things are:
 
-### ``name``
+``name``
+^^^^^^^^
 
 The name of the backend, must match the name of the entry-point.
 
-### ``primary_types`` and ``secondary_types``
+``primary_types`` and ``secondary_types``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Primary and secondary types are defined by a sequence of strings
 and stored as ``primary_types`` and ``secondary_types`` attributes in
@@ -61,7 +63,8 @@ If you use an abstract base class, note that you must take a lot of care:
   classes correctly (but we order them last if a primary type, which is typically right).
 - ``spatch`` will not guarantee correct behavior if an ABC is mutated at runtime.
 
-### ``requires_opt_in``
+``requires_opt_in``
+^^^^^^^^^^^^^^^^^^^
 
 A boolean indicating whether your backend should be active by default.
 Typically, set this to ``True`` for a type dispatching backend and ``False`` otherwise.
@@ -86,7 +89,8 @@ set this to ``True`` if it's behavior matches the library behavior closely.
    or only allow specific ones, and then everyone loses...
 
 
-### functions
+functions
+^^^^^^^^^
 
 A mapping of library functions to your implementations.  All fields use
 the ``__module__:__qualname__`` identifiers to avoid immediate import.
@@ -103,7 +107,8 @@ The following fields are supported for each function:
 
 ``spatch`` provides tooling to help create this mapping.
 
-### Manual backend prioritization
+Manual backend prioritization
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 ``spatch`` tries to order backends based on the types,
 but this cannot get the order right always.
@@ -114,7 +119,8 @@ for example ``higher_priority_than = ["default"]`` or
 It is your responsibility to ensure that these prioritizations make sense and
 are acceptable to other backends.
 
-### More?
+More?
+^^^^^
 
 .. note:: Missing information?
   We are probably missing important information currently.  For example,
