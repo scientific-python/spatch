@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from types import MethodType, SimpleNamespace
 from typing import Any
 
-import importlib_metadata
+import importlib.metadata
 import tomllib
 
 from spatch import from_identifier, get_identifier
@@ -585,7 +585,7 @@ class BackendSystem:
             return []
 
         backends = []
-        eps = importlib_metadata.entry_points(group=group)
+        eps = importlib.metadata.entry_points(group=group)
         for ep in eps:
             if ep.name in blocked:
                 continue
