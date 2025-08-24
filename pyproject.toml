@@ -66,8 +66,12 @@ content-type = "text/markdown"
 path = "README.md"
 
 [project.entry-points._spatch_example_backends]
-backend1 = 'spatch._spatch_example.entry_point'
-backend2 = 'spatch._spatch_example.entry_point2'
+backend1 = 'spatch:_spatch_example/entry_point.toml'
+backend2 = 'spatch:_spatch_example/entry_point2.toml'
+
+[[tool.spatch.update_functions]]
+backend1 = "spatch._spatch_example.backend"
+backend2 = "spatch._spatch_example.backend"
 
 [tool.pytest.ini_options]
 minversion = "6.0"

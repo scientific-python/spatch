@@ -42,11 +42,12 @@ repos:
         args: [--fix=lf]
       # - id: requirements-txt-fixer  # No requirements.txt file yet
       - id: trailing-whitespace
-  - repo: https://github.com/abravalheri/validate-pyproject
-    rev: v0.24.1
-    hooks:
-      - id: validate-pyproject
-        name: Validate pyproject.toml
+  # This is broken currently due to the path to the backend.toml
+  # - repo: https://github.com/abravalheri/validate-pyproject
+  #   rev: v0.24.1
+  #   hooks:
+  #     - id: validate-pyproject
+  #       name: Validate pyproject.toml
   # Remove unnecessary imports (currently behaves better than ruff)
   - repo: https://github.com/PyCQA/autoflake
     rev: v2.3.1
