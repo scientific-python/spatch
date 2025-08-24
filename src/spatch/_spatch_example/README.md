@@ -14,8 +14,9 @@ The "library" contains only:
   designed for only `int` inputs.
 
 We then have two backends with their corresponding definitions in `backend.py`.
-The entry-points are `entry_point.py` and `entry_point2.py` and these files
-can be run to generate their `functions` context (i.e. if you add more functions).
+The entry-points are `entry_point.toml` and `entry_point2.toml`. When code changes,
+these can be updated via `python -m spin update-entrypoints *.toml`
+(the necessary info is in the file itself).
 
 For users we have the following basic capabilities. Starting with normal
 type dispatching.
