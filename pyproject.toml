@@ -9,7 +9,7 @@ dynamic = ["version"]
 description = "Coming soon: Python library for enabling dispatching to backends"
 readme = "README.md"
 license = "BSD-3-Clause"
-requires-python = ">=3.10"
+requires-python = ">=3.11"  # for builtin `tomllib`
 dependencies = ["importlib_metadata"]
 classifiers = [
   "Development Status :: 3 - Alpha",
@@ -19,7 +19,6 @@ classifiers = [
   "Operating System :: OS Independent",
   "Programming Language :: Python",
   "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
@@ -36,8 +35,8 @@ source = "https://github.com/scientific-python/spatch"
 changelog = "https://github.com/scientific-python/spatch/releases"
 
 [dependency-groups]
-# black is used to format entry-point files
-backend_utils = ["black"]
+# tomlkit is used to format entry-point files
+backend_utils = ["tomlkit"]
 test = [
   "pytest >=6",
   "pytest-cov >=3",
