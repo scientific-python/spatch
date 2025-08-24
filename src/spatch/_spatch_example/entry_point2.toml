@@ -11,5 +11,4 @@ backend = "spatch._spatch_example.backend:backend2"
 function = "spatch._spatch_example.backend:divide2"
 should_run = "spatch._spatch_example.backend:divide2._should_run"
 additional_docs = """This is a test backend!
-    and it has a multi-line docstring which makes this longer than normal.
-    """
+and it has a multi-line docstring which makes this longer than normal."""

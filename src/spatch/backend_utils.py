@@ -154,6 +154,8 @@ def import_all_submodules(module_name: str):
 
 
 def update_entrypoint(filepath: str):
+    import inspect  # for `inspect.cleandoc`
+
     import tomlkit
 
     with pathlib.Path.open(filepath) as f:
@@ -206,7 +208,7 @@ def update_entrypoint(filepath: str):
             "function": info.impl_identity,
             "should_run": info.should_run_identity,
             "uses_context": info.uses_context,
-            "additional_docs": tomlkit.string(info.func.__doc__, multiline=True),
+            "additional_docs": tomlkit.string(inspect.cleandoc(info.func.__doc__), multiline=True),
         }
 
         for attr, value in new_values.items():

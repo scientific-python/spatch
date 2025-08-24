@@ -1,18 +1,17 @@
 import contextvars
 import dataclasses
 import functools
+import importlib.metadata
 import importlib.util
 import os
 import sys
 import textwrap
+import tomllib
 import warnings
 from collections.abc import Callable
 from dataclasses import dataclass
 from types import MethodType, SimpleNamespace
 from typing import Any
-
-import importlib.metadata
-import tomllib
 
 from spatch import from_identifier, get_identifier
 from spatch.utils import EMPTY_TYPE_IDENTIFIER, TypeIdentifier, valid_backend_name

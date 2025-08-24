@@ -9,7 +9,7 @@ dynamic = ["version"]
 description = "Coming soon: Python library for enabling dispatching to backends"
 readme = "README.md"
 license = "BSD-3-Clause"
-requires-python = ">=3.11"  # for builtin `tomllib`
+requires-python = ">=3.11" # for builtin `tomllib`
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Environment :: Console",

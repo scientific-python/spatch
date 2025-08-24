@@ -3,7 +3,6 @@ import sys
 import warnings
 from dataclasses import dataclass, field
 from importlib import import_module
-
 from importlib.metadata import version
 
 
