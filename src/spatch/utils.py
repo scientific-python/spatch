@@ -3,8 +3,7 @@ import sys
 import warnings
 from dataclasses import dataclass, field
 from importlib import import_module
-
-from importlib_metadata import version
+from importlib.metadata import version
 
 
 def get_identifier(obj):
@@ -21,12 +20,12 @@ def from_identifier(ident):
 
 
 def get_project_version(project_name, *, action_if_not_found="warn", default=None):
-    """Get the version of a project from ``importlib_metadata``.
+    """Get the version of a project from ``importlib.metadata``.
 
     This is useful to ensure a package is properly installed regardless of the
     tools used to build the project and create the version. Proper installation
     is important to ensure entry-points of the project are discoverable. If the
-    project is not found by ``importlib_metadata``, behavior is controlled by
+    project is not found by ``importlib.metadata``, behavior is controlled by
     the ``action_if_not_found`` and ``default`` keyword arguments.
 
     Parameters

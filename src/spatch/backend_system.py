@@ -1,16 +1,17 @@
 import contextvars
 import dataclasses
 import functools
+import importlib.metadata
+import importlib.util
 import os
 import sys
 import textwrap
+import tomllib
 import warnings
 from collections.abc import Callable
 from dataclasses import dataclass
-from types import MethodType
+from types import MethodType, SimpleNamespace
 from typing import Any
-
-import importlib_metadata
 
 from spatch import from_identifier, get_identifier
 from spatch.utils import EMPTY_TYPE_IDENTIFIER, TypeIdentifier, valid_backend_name
@@ -583,12 +584,34 @@ class BackendSystem:
             return []
 
         backends = []
-        eps = importlib_metadata.entry_points(group=group)
+        eps = importlib.metadata.entry_points(group=group)
         for ep in eps:
             if ep.name in blocked:
                 continue
             try:
-                namespace = ep.load()
+                mod, _, filename = ep.value.partition(":")
+                if "." in mod:
+                    raise RuntimeError(
+                        f"Entrypoint {ep.name} has a module name with a dot: '{mod}'. "
+                        "It must use a top-level module and include submodules as path."
+                    )
+
+                spec = importlib.util.find_spec(mod)
+                reader = spec.loader.get_resource_reader(spec.name)
+                with reader.open_resource(filename) as f:
+                    backend_info = tomllib.load(f)
+
+                # We allow a `functions.defaults` field, apply them here to all functions
+                # and clean up the special fields (defaults and auto-generation).
+                backend_info["functions"].pop("auto-generation", None)  # no need to propagate
+                defaults = backend_info["functions"].pop("defaults", None)
+                if defaults:
+                    functions = backend_info["functions"]
+                    for fun in functions:
+                        functions[fun] = {**defaults, **functions[fun]}
+
+                # We use a namespace internally right now (convenient for in-code backends/tests)
+                namespace = SimpleNamespace(**backend_info)
                 if ep.name != namespace.name:
                     raise RuntimeError(
                         f"Entrypoint name {ep.name!r} and actual name {namespace.name!r} mismatch."
