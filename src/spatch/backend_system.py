@@ -920,7 +920,7 @@ class Dispatchable:
         new_func.__kwdefaults__ = self.__kwdefaults__ = getattr(func, "__kwdefaults__", None)
         new_func.__annotations__ = self.__annotations__ = getattr(func, "__annotations__", {})
         new_func.__type_params__ = self.__type_params__ = getattr(func, "__type_params__", ())
-        new_func.__dict__.update(func.__dict__)
+        new_func.__dict__.update(getattr(func, "__dict__", {}))
         # self.__dict__.update(func.__dict__)  # Don't clobber self.__dict__; too risky!
         self.__wrapped__ = func
         new_func.__wrapped__ = self
