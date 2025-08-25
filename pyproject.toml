@@ -69,6 +69,28 @@ path = "README.md"
 backend1 = 'spatch._spatch_example.entry_point'
 backend2 = 'spatch._spatch_example.entry_point2'
 
+[tool.pixi.workspace]
+channels = ["https://prefix.dev/conda-forge"]
+preview = ["pixi-build"]
+
+[tool.pixi.package]
+name = "spatch"
+# TODO: dynamic version https://github.com/prefix-dev/pixi-build-backends/issues/61
+version = "0.0.0.dev0"
+
+[tool.pixi.package.build.backend]
+name = "pixi-build-python"
+version = "*"
+
+[tool.pixi.package.host-dependencies]
+uv = "*"
+hatchling = "*"
+hatch-vcs = "*"
+hatch-fancy-pypi-readme = "*"
+
+[tool.pixi.package.run-dependencies]
+importlib_metadata = "*"
+
 [tool.pytest.ini_options]
 minversion = "6.0"
 doctest_plus = "enabled"
