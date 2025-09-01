@@ -6,9 +6,10 @@ requires_opt_in = false
 # higher_priority_than = ["default"]
 
 [functions.auto-generation]
-# Backend object that to query
+# `backend = BackendImplementation` object used for `@backend.implements()`
 backend = "spatch._spatch_example.backend:backend1"
-# Modules to load (including submodules) to ensure all functions are initialized
+# Modules to load (including submodules) to ensure all functions are imported.
+# `spatch` will also import all submodules.
 modules = ["spatch._spatch_example.backend"]
 
 [functions.defaults]
