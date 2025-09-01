@@ -3,13 +3,18 @@ Backend API
 
 Backends have to do the heavy lifting of using spatch.
 At the moment we suggest to check the
-`example <https://github.com/scientific-python/spatch/tree/main/spatch/_spatch_example>`_.
+`example <https://github.com/scientific-python/spatch/tree/main/src/spatch/_spatch_example>`_.
 
 Entry point definition
 ----------------------
-To extend an existing library with a backend, you need to define a `Python entry-point <https://packaging.python.org/en/latest/specifications/entry-points/>`_.
+To extend an existing library with a backend, you need to define a
+`Python entry-point <https://packaging.python.org/en/latest/specifications/entry-points/>`_.
 This entry point includes the necessary information for spatch to find and
 dispatch to your backend.
+
+``spatch`` entry-points are TOML files and *not* Python objects.
+The entry-point value must point to the file with
+``module.submodule:filename.toml``. [#ep-value-structure]_
 
 Before writing a backend, you need to think about a few things:
 
@@ -25,11 +30,11 @@ Before writing a backend, you need to think about a few things:
   In that case, your backend should likely only be used if prioritized
   by the user.
 
-Please check the example linked above.  These example entry-points include
-code that means running them modifies them in-place if the ``@implements``
-decorator is used (see next section).
+Please check the example linked above.  ``spatch`` can automatically update
+the functions entries in these entry-points if the ``@implements`` decorator
+is used (see next section).
 
-Some of the most important things are:
+Some of the most important fields are:
 
 ``name``
 ^^^^^^^^
@@ -55,13 +60,14 @@ However, we do support the following, e.g.:
 - ``"~numpy:ndarray"`` to match any subclass of NumPy arrays
 - ``"@module:qualname"`` to match any subclass of an abstract base class
 
-If you use an abstract base class, note that you must take a lot of care:
+.. warning::
+  If you use an abstract base class, note that you must take additional care:
 
-- The abstract base class must be cheap to import, because we cannot avoid
-  importing it.
-- Since we can't import all classes, ``spatch`` has no ability to order abstract
-  classes correctly (but we order them last if a primary type, which is typically right).
-- ``spatch`` will not guarantee correct behavior if an ABC is mutated at runtime.
+  - The abstract base class must be *cheap to import*, because we cannot avoid
+    importing it.
+  - Since we can't import all classes, ``spatch`` has no ability to order abstract
+    classes correctly (but we order them last if a primary type, which is typically correct).
+  - ``spatch`` will not guarantee correct behavior if an ABC is mutated at runtime.
 
 ``requires_opt_in``
 ^^^^^^^^^^^^^^^^^^^
@@ -93,19 +99,36 @@ functions
 ^^^^^^^^^
 
 A mapping of library functions to your implementations.  All fields use
-the ``__module__:__qualname__`` identifiers to avoid immediate import.
+the ``__module__:__qualname__`` identifiers.
 The following fields are supported for each function:
 
 - ``function``: The implementation to dispatch to.
 - ``should_run`` (optional): A function that gets all inputs (and context)
   and can decide to defer.  Unless you know things will error, try to make sure
   that this function is light-weight.
-- ``uses_context``: Whether the implementation needs a ``DispatchContext``.
+- ``uses_context`` (optional): Whether the implementation needs a ``DispatchContext``.
 - ``additional_docs`` (optional): Brief text to add to the documentation
   of the original function. We suggest keeping this short but including a
   link, but the library guidance should be followed.
 
-``spatch`` provides tooling to help create this mapping.
+A typical part of the entry-point TOML will look like this::
+
+  [functions."skimage.filters:gaussian"]
+  function = "cucim.skimage.filters:gaussian"
+  uses_context = true
+  additional_docs = "CUDA enabled version..."
+
+An additional ``[functions.defaults]`` key can be added to set defaults for all
+functions and avoid repeating e.g. ``uses_context``.
+
+``spatch`` provides tooling to help create this mapping.  This tooling uses the
+additional fields::
+
+  [functions.auto-generation]
+  # where to find the BackendImplementation:
+  backend = "module.submodule:backend_name"
+  # Additional modules to be imported (to ensure all functions are found):
+  modules = ["spatch._spatch_example.backend"]
 
 Manual backend prioritization
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -126,6 +149,13 @@ More?
   We are probably missing important information currently.  For example,
   maybe a version?  (I don't think we generally need it, but it may be
   interesting.)
+
+.. [#ep-value-structure]
+   ``spatch`` currently assumes submodules follow directory structure so that
+   the file is located relative to the main ``module`` at
+   ``module/submodule/filename.toml``.  As of 2025, do *not* use ``/`` in
+   the filename, since the entry-point value may be checked for being a
+   valid Python object ``__qualname__``, which a ``/`` is not.
 
 Implementations for dispatchable functions
 ------------------------------------------

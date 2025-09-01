@@ -1,0 +1,22 @@
+name = "backend1"
+primary_types = ["builtins:float", "builtins:int"]
+secondary_types = []
+requires_opt_in = false
+
+# higher_priority_than = ["default"]
+
+[functions.auto-generation]
+# `backend = BackendImplementation` object used for `@backend.implements()`
+backend = "spatch._spatch_example.backend:backend1"
+# Modules to load (including submodules) to ensure all functions are imported.
+# `spatch` will also import all submodules.
+modules = ["spatch._spatch_example.backend"]
+
+[functions.defaults]
+# Options here will be defaults for all functions.
+uses_context = true
+
+[functions."spatch._spatch_example.library:divide"]
+function = "spatch._spatch_example.backend:divide"
+should_run = "spatch._spatch_example.backend:divide._should_run"
+additional_docs = """This implementation works well on floats."""

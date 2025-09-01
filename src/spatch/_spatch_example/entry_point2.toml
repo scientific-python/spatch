@@ -1,0 +1,14 @@
+name = "backend2"
+primary_types = ["builtins:float", "builtins:complex"]
+secondary_types = ["builtins:int"]
+requires_opt_in = false
+
+[functions.auto-generation]
+backend = "spatch._spatch_example.backend:backend2"
+# `modules` not needed (backend import loads all functions)
+
+[functions."spatch._spatch_example.library:divide"]
+function = "spatch._spatch_example.backend:divide2"
+should_run = "spatch._spatch_example.backend:divide2._should_run"
+additional_docs = """This is a test backend!
+and it has a multi-line docstring which makes this longer than normal."""
