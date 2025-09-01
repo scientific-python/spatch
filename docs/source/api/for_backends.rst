@@ -66,7 +66,7 @@ However, we do support the following, e.g.:
   - The abstract base class must be *cheap to import*, because we cannot avoid
     importing it.
   - Since we can't import all classes, ``spatch`` has no ability to order abstract
-    classes correctly (but we order them last if a primary type, which is typically right).
+    classes correctly (but we order them last if a primary type, which is typically correct).
   - ``spatch`` will not guarantee correct behavior if an ABC is mutated at runtime.
 
 ``requires_opt_in``

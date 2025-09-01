@@ -597,7 +597,7 @@ class BackendSystem:
                 mod, _, filename = ep.value.partition(":")
                 # As of writing, entry-points are assumed to be valid Python
                 # names (e.g. no `/`).  But we can presumably assume that the
-                # submodules follow a director structure (at least in practice).
+                # submodules follow a directory structure (at least in practice).
                 # See also https://github.com/python/importlib_metadata/issues/523
                 mod, *path = mod.split(".")
 
