@@ -1,4 +1,5 @@
 import pathlib
+import warnings
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -226,3 +227,153 @@ def update_entrypoint(filepath: str):
 
     with pathlib.Path(filepath).open(mode="w") as f:
         tomlkit.dump(data, f)
+
+
+def verify_entrypoint(filepath: str):
+    from importlib import import_module
+
+    try:
+        import tomllib
+    except ImportError:
+        import tomli as tomllib  # for Python 3.10 support
+
+    with pathlib.Path(filepath).open("rb") as f:
+        data = tomllib.load(f)
+
+    schema = {
+        "name": "python_identifier",
+        "primary_types": ["dispatch_identifier"],
+        "secondary_types": ["dispatch_identifier"],
+        "requires_opt_in": bool,
+        "higher_priority_than?": ["python_identifier"],
+        "lower_priority_than?": ["python_identifier"],
+        "functions": {
+            "auto-generation?": {
+                "backend": "dispatch_identifier",
+                "modules?": "modules",
+            },
+            "defaults?": {
+                "function?": "dispatch_identifier",
+                "should_run?": "dispatch_identifier",
+                "additional_docs?": str,
+                "uses_context?": bool,
+            },
+        },
+    }
+    function_schema = {
+        "function": "dispatch_identifier",
+        "should_run?": "dispatch_identifier",
+        "additional_docs?": str,
+        "uses_context?": bool,
+    }
+
+    def to_path_key(path):
+        # We indicate list elements with [i], which isn't proper toml
+        path_key = ".".join(f'"{key}"' if "." in key or ":" in key else key for key in path)
+        return path_key.replace(".[", "[")
+
+    def handle_bool(path_key, val):
+        if not isinstance(val, bool):
+            raise TypeError(f"{path_key} = {val} value is not a bool; got type {type(val)}")
+
+    def handle_str(path_key, val):
+        if not isinstance(val, str):
+            raise TypeError(f"{path_key} = {val} value is not a str; got type {type(val)}")
+
+    def handle_python_identifier(path_key, val):
+        handle_str(path_key, val)
+        if not val.isidentifier():
+            raise ValueError(f"{path_key} = {val} value is not a valid Python identifier")
+
+    def handle_dispatch_identifier(path_key, val, path):
+        handle_str(path_key, val)
+        try:
+            from_identifier(val)
+        except ModuleNotFoundError as exc:
+            # Should we allow this to be strict? What if other packages aren't installed?
+            warnings.warn(
+                f"{path_key} = {val} identifier not found: {exc.args[0]}",
+                UserWarning,
+                len(path) + 1,  # TODO: figure out
+            )
+        except AttributeError as exc:
+            raise ValueError(f"{path_key} = {val} identifier not found") from exc
+
+    def handle_modules(path_key, val):
+        if isinstance(val, str):
+            val = [val]
+        elif not isinstance(val, list):
+            raise TypeError(f"{path_key} = {val} value is not a str or list; got type {type(val)}")
+        for i, module_name in enumerate(val):
+            inner_path_key = f"{path_key}[{i}]"
+            handle_str(inner_path_key, module_name)
+            try:
+                import_module(module_name)
+            except ModuleNotFoundError as exc:
+                raise ValueError(f"{inner_path_key} = {module_name} module not found") from exc
+
+    def check_schema(schema, data, path=()):
+        # Show possible misspellings with a warning
+        schema_keys = {key.removesuffix("?") for key in schema}
+        extra_keys = data.keys() - schema_keys
+        if extra_keys and path != ("functions",):
+            path_key = to_path_key(path)
+            extra_keys = ", ".join(sorted(extra_keys))
+            warnings.warn(
+                f'"{path_key}" section has extra keys: {extra_keys}',
+                UserWarning,
+                len(path) + 1,  # TODO: figure out
+            )
+
+        for schema_key, schema_val in schema.items():
+            key = schema_key.removesuffix("?")
+            path_key = to_path_key((*path, key))
+            if len(key) != len(schema_key):  # optional key
+                if key not in data:
+                    continue
+            elif key not in data:
+                raise KeyError(f"Missing required key: {path_key}")
+
+            val = data[key]
+            if schema_val is bool:
+                handle_bool(path_key, val)
+            elif schema_val is str:
+                handle_str(path_key, val)
+            elif isinstance(schema_val, dict):
+                if not isinstance(val, dict):
+                    raise TypeError(f"{path_key} value is not a dict; got type {type(val)}")
+                check_schema(schema_val, val, (*path, key))
+            elif isinstance(schema_val, list):
+                if not isinstance(val, list):
+                    raise TypeError(f"{path_key} value is not a list; got type {type(val)}")
+                val_as_dict = {f"[{i}]": x for i, x in enumerate(val)}
+                schema_as_dict = dict.fromkeys(val_as_dict, schema_val[0])
+                check_schema(schema_as_dict, val_as_dict, (*path, key))
+            elif schema_val == "python_identifier":
+                handle_python_identifier(path_key, val)
+            elif schema_val == "dispatch_identifier":
+                handle_dispatch_identifier(path_key, val, path)
+            elif schema_val == "modules":
+                handle_modules(path_key, val)
+            else:
+                raise RuntimeError(f"unreachable: unknown schema: {schema_val}")
+
+    check_schema(schema, data)
+
+    def check_functions(function_schema, schema, data):
+        function_keys_to_skip = {key.removesuffix("?") for key in schema.get("functions", {})}
+        data_functions_schema = dict.fromkeys(
+            (key for key in data["functions"] if key not in function_keys_to_skip),
+            function_schema,
+        )
+        check_schema(data_functions_schema, data["functions"], ("functions",))
+
+    check_functions(function_schema, schema, data)
+
+    if (backend := data.get("functions", {}).get("auto-generation", {}).get("backend")) is not None:
+        backend = from_identifier(backend)
+        if backend.name != data["name"]:
+            raise ValueError(
+                f"toml backend '{backend.name}' name and loaded backend name "
+                f"'{data['name']}' do not match."
+            )
