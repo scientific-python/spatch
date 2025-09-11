@@ -15,8 +15,9 @@ The "library" contains only:
 
 We then have two backends with their corresponding definitions in `backend.py`.
 The entry-points are `entry_point.toml` and `entry_point2.toml`. When code changes,
-these can be updated via `python -m spin update-entrypoints *.toml`
-(the necessary info is in the file itself).
+these can be updated via `python -m spatch update-entrypoints *.toml`
+(the necessary info is in the file itself) and verified with
+`python -m spatch verify-entrypoints *.toml`.
 
 For users we have the following basic capabilities. Starting with normal
 type dispatching.

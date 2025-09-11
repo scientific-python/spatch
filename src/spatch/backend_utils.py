@@ -1,4 +1,5 @@
 import pathlib
+import warnings
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -226,3 +227,221 @@ def update_entrypoint(filepath: str):
 
     with pathlib.Path(filepath).open(mode="w") as f:
         tomlkit.dump(data, f)
+
+
+def verify_entrypoint(filepath: str, optional_modules: set | None = None):
+    try:
+        import tomllib
+    except ImportError:
+        import tomli as tomllib  # for Python 3.10 support
+
+    with pathlib.Path(filepath).open("rb") as f:
+        data = tomllib.load(f)
+
+    _verify_entrypoint_dict(data, optional_modules)
+
+
+def _verify_entrypoint_dict(data: dict, optional_modules: set | None = None):
+    from importlib import import_module
+
+    schema = {
+        "name": "python_identifier",
+        "primary_types": ["dispatch_identifier-type"],
+        "secondary_types": ["dispatch_identifier-type"],
+        "requires_opt_in": bool,
+        "higher_priority_than?": ["python_identifier"],
+        "lower_priority_than?": ["python_identifier"],
+        "functions": {
+            "auto-generation?": {
+                "backend": "dispatch_identifier-backend",
+                "modules?": "modules",
+            },
+            "defaults?": {
+                "function?": "dispatch_identifier-callable",
+                "should_run?": "dispatch_identifier-callable",
+                "additional_docs?": str,
+                "uses_context?": bool,
+            },
+        },
+    }
+    function_schema = {
+        "function": "dispatch_identifier-callable",
+        "should_run?": "dispatch_identifier-callable",
+        "additional_docs?": str,
+        "uses_context?": bool,
+    }
+
+    def to_path_key(path):
+        # We indicate list elements with [i], which isn't proper toml
+        path_key = ".".join(f'"{key}"' if "." in key or ":" in key else key for key in path)
+        return path_key.replace(".[", "[")
+
+    def handle_bool(path_key, val):
+        if not isinstance(val, bool):
+            raise TypeError(f"{path_key} = {val} value is not a bool; got type {type(val)}")
+
+    def handle_str(path_key, val):
+        if not isinstance(val, str):
+            raise TypeError(f"{path_key} = {val} value is not a str; got type {type(val)}")
+
+    def handle_python_identifier(path_key, val):
+        handle_str(path_key, val)
+        if not val.isidentifier():
+            raise ValueError(f"{path_key} = {val} value is not a valid Python identifier")
+
+    def handle_dispatch_identifier(path_key, val, path):
+        handle_str(path_key, val)
+        try:
+            from_identifier(val)
+        except ModuleNotFoundError as exc:
+            module_name = val.split(":", 1)[0].split(".", 1)[0]
+            if optional_modules and module_name in optional_modules:
+                warnings.warn(
+                    f"{path_key} = {val} identifier not found: {exc.args[0]}",
+                    UserWarning,
+                    len(path) + 5,
+                )
+                return False
+            raise ValueError(f"{path_key} = {val} identifier not found") from exc
+        except AttributeError as exc:
+            raise ValueError(f"{path_key} = {val} identifier not found") from exc
+        return True
+
+    def handle_dispatch_identifier_type(path_key, val):
+        reified_val = from_identifier(val)
+        if not isinstance(reified_val, type):
+            raise TypeError(f"{path_key} = {val} value must be a type (such as a class)")
+
+    def handle_dispatch_identifier_callable(path_key, val):
+        reified_val = from_identifier(val)
+        if not callable(reified_val):
+            raise TypeError(f"{path_key} = {val} value must be callable")
+
+    def handle_dispatch_identifier_backend(path_key, val, backend_name):
+        reified_val = from_identifier(val)
+        if not isinstance(reified_val, BackendImplementation):
+            # Is this too strict?
+            raise TypeError(f"{path_key} = {val} value must be a BackendImplementation object")
+
+        if reified_val.name != backend_name:
+            raise ValueError(
+                f"{path_key} = {val} backend name does not match the name "
+                f"in the toml file: {reified_val.name!r} != {backend_name!r}"
+            )
+
+    def handle_modules(path_key, val, path):
+        if isinstance(val, str):
+            val = [val]
+        elif not isinstance(val, list):
+            raise TypeError(f"{path_key} = {val} value is not a str or list; got type {type(val)}")
+        for i, module_name in enumerate(val):
+            inner_path_key = f"{path_key}[{i}]"
+            handle_str(inner_path_key, module_name)
+            try:
+                import_module(module_name)
+            except ModuleNotFoundError as exc:
+                mod_name = module_name.split(".", 1)[0]
+                if optional_modules and mod_name in optional_modules:
+                    warnings.warn(
+                        f"{inner_path_key} = {module_name} module not found",
+                        UserWarning,
+                        len(path) + 5,
+                    )
+                else:
+                    raise ValueError(f"{inner_path_key} = {module_name} module not found") from exc
+
+    def check_schema(schema, data, backend_name, path=()):
+        # Show possible misspellings with a warning
+        schema_keys = {key.removesuffix("?") for key in schema}
+        if extra_keys := data.keys() - schema_keys:
+            path_key = to_path_key(path)
+            extra_keys = ", ".join(sorted(extra_keys))
+            warnings.warn(
+                f'"{path_key}" section has extra keys: {extra_keys}',
+                UserWarning,
+                len(path) + 4,
+            )
+
+        for schema_key, schema_val in schema.items():
+            key = schema_key.removesuffix("?")
+            path_key = to_path_key((*path, key))
+            if len(key) != len(schema_key):  # optional key
+                if key not in data:
+                    continue
+            elif key not in data:
+                raise KeyError(f"Missing required key: {path_key}")
+
+            val = data[key]
+            if schema_val is bool:
+                handle_bool(path_key, val)
+            elif schema_val is str:
+                handle_str(path_key, val)
+            elif isinstance(schema_val, dict):
+                if not isinstance(val, dict):
+                    raise TypeError(f"{path_key} value is not a dict; got type {type(val)}")
+                check_schema(schema_val, val, backend_name, (*path, key))
+            elif isinstance(schema_val, list):
+                if not isinstance(val, list):
+                    raise TypeError(f"{path_key} value is not a list; got type {type(val)}")
+                val_as_dict = {f"[{i}]": x for i, x in enumerate(val)}
+                schema_as_dict = dict.fromkeys(val_as_dict, schema_val[0])
+                check_schema(schema_as_dict, val_as_dict, backend_name, (*path, key))
+            elif schema_val == "python_identifier":
+                handle_python_identifier(path_key, val)
+            elif schema_val.startswith("dispatch_identifier"):
+                if not handle_dispatch_identifier(path_key, val, path):
+                    continue
+                if schema_val.endswith("-type"):
+                    handle_dispatch_identifier_type(path_key, val)
+                elif schema_val.endswith("-callable"):
+                    handle_dispatch_identifier_callable(path_key, val)
+                elif schema_val.endswith("-backend"):
+                    handle_dispatch_identifier_backend(path_key, val, backend_name)
+                elif "-" in schema_val:
+                    raise RuntimeError(f"unreachable: unknown schema: {schema_val}")
+            elif schema_val == "modules":
+                handle_modules(path_key, val, path)
+            else:
+                raise RuntimeError(f"unreachable: unknown schema: {schema_val}")
+
+    if not isinstance(data, dict):
+        raise TypeError(f"toml data must be a dict; got type {type(data)}")
+    if not isinstance(data.get("functions"), dict):
+        raise TypeError(f"functions value is not a dict; got type {type(data.get('functions'))}")
+
+    backend_name = data.get("name", "<unknown>")
+
+    # Check everything except schema for dispatched functions
+    fixed_functions_schema = {key.removesuffix("?") for key in schema.get("functions", {})}
+    fixed_data = dict(data)
+    fixed_data["functions"] = {
+        key: val for key, val in data["functions"].items() if key in fixed_functions_schema
+    }
+    check_schema(schema, fixed_data, backend_name)
+
+    # Now check the dispatched functions
+    dynamic_functions_data = dict(data)
+    dynamic_functions_data = {
+        "functions": {
+            key: val for key, val in data["functions"].items() if key not in fixed_functions_schema
+        }
+    }
+    dynamic_functions_schema = {
+        "functions": dict.fromkeys(
+            dynamic_functions_data["functions"],
+            function_schema,
+        ),
+    }
+    check_schema(dynamic_functions_schema, dynamic_functions_data, backend_name)
+
+    # And a small hack to check the *keys* of dispatched functions
+    function_keys_data = {
+        "functions": {key: key for key in dynamic_functions_data["functions"]},
+    }
+    function_keys_schema = {
+        "functions": dict.fromkeys(
+            dynamic_functions_data["functions"],
+            "dispatch_identifier-callable",
+        ),
+    }
+    check_schema(function_keys_schema, function_keys_data, backend_name)
