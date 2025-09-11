@@ -230,8 +230,6 @@ def update_entrypoint(filepath: str):
 
 
 def verify_entrypoint(filepath: str, optional_modules: set | None = None):
-    from importlib import import_module
-
     try:
         import tomllib
     except ImportError:
@@ -239,6 +237,12 @@ def verify_entrypoint(filepath: str, optional_modules: set | None = None):
 
     with pathlib.Path(filepath).open("rb") as f:
         data = tomllib.load(f)
+
+    _verify_entrypoint_dict(data, optional_modules)
+
+
+def _verify_entrypoint_dict(data: dict, optional_modules: set | None = None):
+    from importlib import import_module
 
     schema = {
         "name": "python_identifier",
@@ -295,12 +299,13 @@ def verify_entrypoint(filepath: str, optional_modules: set | None = None):
                 warnings.warn(
                     f"{path_key} = {val} identifier not found: {exc.args[0]}",
                     UserWarning,
-                    len(path) + 4,
+                    len(path) + 5,
                 )
-            else:
-                raise ValueError(f"{path_key} = {val} identifier not found") from exc
+                return False
+            raise ValueError(f"{path_key} = {val} identifier not found") from exc
         except AttributeError as exc:
             raise ValueError(f"{path_key} = {val} identifier not found") from exc
+        return True
 
     def handle_dispatch_identifier_type(path_key, val):
         reified_val = from_identifier(val)
@@ -310,7 +315,7 @@ def verify_entrypoint(filepath: str, optional_modules: set | None = None):
     def handle_dispatch_identifier_callable(path_key, val):
         reified_val = from_identifier(val)
         if not callable(reified_val):
-            raise TypeError(f"{path_key} = {val} value must callable")
+            raise TypeError(f"{path_key} = {val} value must be callable")
 
     def handle_dispatch_identifier_backend(path_key, val, backend_name):
         reified_val = from_identifier(val)
@@ -340,7 +345,7 @@ def verify_entrypoint(filepath: str, optional_modules: set | None = None):
                     warnings.warn(
                         f"{inner_path_key} = {module_name} module not found",
                         UserWarning,
-                        len(path) + 4,
+                        len(path) + 5,
                     )
                 else:
                     raise ValueError(f"{inner_path_key} = {module_name} module not found") from exc
@@ -354,7 +359,7 @@ def verify_entrypoint(filepath: str, optional_modules: set | None = None):
             warnings.warn(
                 f'"{path_key}" section has extra keys: {extra_keys}',
                 UserWarning,
-                len(path) + 3,
+                len(path) + 4,
             )
 
         for schema_key, schema_val in schema.items():
@@ -384,7 +389,8 @@ def verify_entrypoint(filepath: str, optional_modules: set | None = None):
             elif schema_val == "python_identifier":
                 handle_python_identifier(path_key, val)
             elif schema_val.startswith("dispatch_identifier"):
-                handle_dispatch_identifier(path_key, val, path)
+                if not handle_dispatch_identifier(path_key, val, path):
+                    continue
                 if schema_val.endswith("-type"):
                     handle_dispatch_identifier_type(path_key, val)
                 elif schema_val.endswith("-callable"):
@@ -397,6 +403,11 @@ def verify_entrypoint(filepath: str, optional_modules: set | None = None):
                 handle_modules(path_key, val, path)
             else:
                 raise RuntimeError(f"unreachable: unknown schema: {schema_val}")
+
+    if not isinstance(data, dict):
+        raise TypeError(f"toml data must be a dict; got type {type(data)}")
+    if not isinstance(data.get("functions"), dict):
+        raise TypeError(f"functions value is not a dict; got type {type(data.get('functions'))}")
 
     backend_name = data.get("name", "<unknown>")
 
@@ -422,3 +433,15 @@ def verify_entrypoint(filepath: str, optional_modules: set | None = None):
         ),
     }
     check_schema(dynamic_functions_schema, dynamic_functions_data, backend_name)
+
+    # And a small hack to check the *keys* of dispatched functions
+    function_keys_data = {
+        "functions": {key: key for key in dynamic_functions_data["functions"]},
+    }
+    function_keys_schema = {
+        "functions": dict.fromkeys(
+            dynamic_functions_data["functions"],
+            "dispatch_identifier-callable",
+        ),
+    }
+    check_schema(function_keys_schema, function_keys_data, backend_name)
