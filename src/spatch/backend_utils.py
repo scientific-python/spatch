@@ -229,7 +229,7 @@ def update_entrypoint(filepath: str):
         tomlkit.dump(data, f)
 
 
-def verify_entrypoint(filepath: str):
+def verify_entrypoint(filepath: str, optional_modules: set | None = None):
     from importlib import import_module
 
     try:
@@ -290,16 +290,19 @@ def verify_entrypoint(filepath: str):
         try:
             from_identifier(val)
         except ModuleNotFoundError as exc:
-            # Should we allow this to be strict? What if other packages aren't installed?
-            warnings.warn(
-                f"{path_key} = {val} identifier not found: {exc.args[0]}",
-                UserWarning,
-                len(path) + 1,  # TODO: figure out
-            )
+            module_name = val.split(":", 1)[0].split(".", 1)[0]
+            if optional_modules and module_name in optional_modules:
+                warnings.warn(
+                    f"{path_key} = {val} identifier not found: {exc.args[0]}",
+                    UserWarning,
+                    len(path) + 4,
+                )
+            else:
+                raise ValueError(f"{path_key} = {val} identifier not found") from exc
         except AttributeError as exc:
             raise ValueError(f"{path_key} = {val} identifier not found") from exc
 
-    def handle_modules(path_key, val):
+    def handle_modules(path_key, val, path):
         if isinstance(val, str):
             val = [val]
         elif not isinstance(val, list):
@@ -310,19 +313,26 @@ def verify_entrypoint(filepath: str):
             try:
                 import_module(module_name)
             except ModuleNotFoundError as exc:
-                raise ValueError(f"{inner_path_key} = {module_name} module not found") from exc
+                mod_name = module_name.split(".", 1)[0]
+                if optional_modules and mod_name in optional_modules:
+                    warnings.warn(
+                        f"{inner_path_key} = {module_name} module not found",
+                        UserWarning,
+                        len(path) + 4,
+                    )
+                else:
+                    raise ValueError(f"{inner_path_key} = {module_name} module not found") from exc
 
     def check_schema(schema, data, path=()):
         # Show possible misspellings with a warning
         schema_keys = {key.removesuffix("?") for key in schema}
-        extra_keys = data.keys() - schema_keys
-        if extra_keys and path != ("functions",):
+        if extra_keys := data.keys() - schema_keys:
             path_key = to_path_key(path)
             extra_keys = ", ".join(sorted(extra_keys))
             warnings.warn(
                 f'"{path_key}" section has extra keys: {extra_keys}',
                 UserWarning,
-                len(path) + 1,  # TODO: figure out
+                len(path) + 3,
             )
 
         for schema_key, schema_val in schema.items():
@@ -354,21 +364,32 @@ def verify_entrypoint(filepath: str):
             elif schema_val == "dispatch_identifier":
                 handle_dispatch_identifier(path_key, val, path)
             elif schema_val == "modules":
-                handle_modules(path_key, val)
+                handle_modules(path_key, val, path)
             else:
                 raise RuntimeError(f"unreachable: unknown schema: {schema_val}")
 
-    check_schema(schema, data)
+    # Check everything except schema for dispatched functions
+    fixed_functions_schema = {key.removesuffix("?") for key in schema.get("functions", {})}
+    fixed_data = dict(data)
+    fixed_data["functions"] = {
+        key: val for key, val in data["functions"].items() if key in fixed_functions_schema
+    }
+    check_schema(schema, fixed_data)
 
-    def check_functions(function_schema, schema, data):
-        function_keys_to_skip = {key.removesuffix("?") for key in schema.get("functions", {})}
-        data_functions_schema = dict.fromkeys(
-            (key for key in data["functions"] if key not in function_keys_to_skip),
+    # Now check the dispatched functions
+    dynamic_functions_data = dict(data)
+    dynamic_functions_data = {
+        "functions": {
+            key: val for key, val in data["functions"].items() if key not in fixed_functions_schema
+        }
+    }
+    dynamic_functions_schema = {
+        "functions": dict.fromkeys(
+            dynamic_functions_data["functions"],
             function_schema,
-        )
-        check_schema(data_functions_schema, data["functions"], ("functions",))
-
-    check_functions(function_schema, schema, data)
+        ),
+    }
+    check_schema(dynamic_functions_schema, dynamic_functions_data)
 
     if (backend := data.get("functions", {}).get("auto-generation", {}).get("backend")) is not None:
         backend = from_identifier(backend)
