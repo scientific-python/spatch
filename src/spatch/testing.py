@@ -1,4 +1,4 @@
-from spatch.utils import get_identifier
+from .utils import get_identifier
 
 
 class _FuncGetter:
