@@ -13,8 +13,13 @@ from dataclasses import dataclass
 from types import MethodType, SimpleNamespace
 from typing import Any
 
-from spatch import from_identifier, get_identifier
-from spatch.utils import EMPTY_TYPE_IDENTIFIER, TypeIdentifier, valid_backend_name
+from .utils import (
+    EMPTY_TYPE_IDENTIFIER,
+    TypeIdentifier,
+    from_identifier,
+    get_identifier,
+    valid_backend_name,
+)
 
 try:
     import tomllib
