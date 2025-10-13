@@ -1,3 +1,7 @@
-from .utils import from_identifier, get_identifier, get_project_version
+def __getattr__(name):
+    if name == "__version__":
+        from .utils import get_project_version
 
-__version__ = get_project_version("spatch")
+        return get_project_version(__name__)
+
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
