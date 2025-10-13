@@ -402,7 +402,14 @@ class BackendOpts:
 
 
 class BackendSystem:
-    def __init__(self, group, environ_prefix, default_primary_types=None, backends=None):
+    def __init__(
+        self,
+        group,
+        environ_prefix,
+        default_primary_types=None,
+        backends=None,
+        update_docs_function=None,
+    ):
         """Create a backend system that provides a @dispatchable decorator.
 
         The backend system also has provides the ``backend_opts`` context manager
@@ -437,7 +444,14 @@ class BackendSystem:
             but may be used for a library to add internal backends.
             (The order of backends passed is used and should be consistent between runs.)
 
+        update_docs_function : callable or None
+            A function that will be called to insert backend information into the
+            dispatchable documentation. The default adds a "Backends" section listing
+            each backend and the ``additional_docs`` of the function in the entry-point.
         """
+        if update_docs_function is not None:
+            self._update_docs_function = update_docs_function
+
         self.backends = {}
         if default_primary_types is not None:
             self.backends["default"] = Backend(
@@ -731,6 +745,21 @@ class BackendSystem:
 
         return wrap_callable
 
+    @staticmethod
+    def _update_docs_function(doc, impl_infos):
+        new_doc = []
+        for backend_name, info in impl_infos.items():
+            new_blurb = info.get("additional_docs", "No backend documentation available.")
+            new_doc.append(f"{backend_name} :\n" + textwrap.indent(new_blurb, "    "))
+
+        if not new_doc:
+            new_doc = ["No backends found for this function."]
+
+        new_doc = "\n\n".join(new_doc)
+        new_doc = "\n\nBackends\n--------\n" + new_doc
+
+        return doc + new_doc
+
     @functools.cached_property
     def backend_opts(self):
         """Property returning a :py:class:`BackendOpts` class specific to this library
@@ -902,7 +931,6 @@ class Dispatchable:
 
         self._dispatch_args = dispatch_args
 
-        new_doc = []
         impl_infos = {}
         for backend in backend_system.backends.values():
             if backend.name == "default":
@@ -914,9 +942,6 @@ class Dispatchable:
 
             impl_infos[backend.name] = info
 
-            new_blurb = info.get("additional_docs", "No backend documentation available.")
-            new_doc.append(f"{backend.name} :\n" + textwrap.indent(new_blurb, "    "))
-
         # Create implementations, lazy loads should_run (and maybe more in the future).
         self._implementations = _Implentations(impl_infos)
         self._implementations["default"] = _Implementation(
@@ -926,15 +951,10 @@ class Dispatchable:
             False,
         )
 
-        if not new_doc:
-            new_doc = ["No backends found for this function."]
-
-        new_doc = "\n\n".join(new_doc)
-        new_doc = "\n\nBackends\n--------\n" + new_doc
-
         # Just dedent, so it makes sense to append (should be fine):
         if func.__doc__ is not None:
-            self.__doc__ = textwrap.dedent(func.__doc__) + new_doc
+            self.__doc__ = backend_system._update_docs_function(
+                textwrap.dedent(func.__doc__), impl_infos)
         else:
             self.__doc__ = None  # not our problem
 
