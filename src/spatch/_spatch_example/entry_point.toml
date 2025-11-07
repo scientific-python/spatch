@@ -20,3 +20,9 @@ uses_context = true
 function = "spatch._spatch_example.backend:divide"
 should_run = "spatch._spatch_example.backend:divide._should_run"
 additional_docs = """This implementation works well on floats."""
+
+
+
+[functions."spatch._spatch_example.library:StatefulClass.apply"]
+function = "spatch._spatch_example.backend:StatefulClassImpl._from_apply"
+uses_context = false

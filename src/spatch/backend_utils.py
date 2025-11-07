@@ -205,11 +205,15 @@ def update_entrypoint(filepath: str):
 
         func_info = functions[info.api_identity]
 
+        if info.func.__doc__ is not None:
+            docs = tomlkit.string(inspect.cleandoc(info.func.__doc__), multiline=True)
+        else:
+            docs = None
         new_values = {
             "function": info.impl_identity,
             "should_run": info.should_run_identity,
             "uses_context": info.uses_context,
-            "additional_docs": tomlkit.string(inspect.cleandoc(info.func.__doc__), multiline=True),
+            "additional_docs": docs,
         }
 
         for attr, value in new_values.items():
