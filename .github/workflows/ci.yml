@@ -9,8 +9,6 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -46,7 +44,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
           allow-prereleases: true
 
-      - uses: astral-sh/setup-uv@v7
+      - uses: astral-sh/setup-uv@1e862dfacbd1d6d858c55d9b792c756523627244 # v7.1.4
 
       - name: Install package
         run: uv sync
@@ -58,6 +56,9 @@ jobs:
 
   docs:
     uses: ./.github/workflows/build-docs.yml
+    permissions:
+      pages: write
+      id-token: write
     with:
       # Deploy on tag pushes (assume that is a release)
       deploy: ${{ (github.event_name == 'push' && startsWith(github.ref, 'refs/tags')) }}

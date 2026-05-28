@@ -983,7 +983,7 @@ class Dispatchable:
         # At this point dispatch_types is not filtered for known types.
         dispatch_types = {type(val) for val in dispatch_args}
         state = self._backend_system._dispatch_state.get()
-        ordered_backends, type_, prioritized, trace = state
+        ordered_backends, type_, _prioritized, trace = state
 
         if type_ is not None:
             dispatch_types.add(type_)

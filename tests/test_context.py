@@ -23,7 +23,7 @@ def test_context_basic():
     def dummy_func(*args, **kwargs):
         return "fallback", args, kwargs
 
-    _, (ctx, *args), kwargs = dummy_func(1, 1.0)
+    _, (ctx, *_args), _kwargs = dummy_func(1, 1.0)
     assert ctx.name == "FloatWithContext"
     assert set(ctx.types) == {int, float}
     assert ctx.dispatch_args == (1, 1.0)
@@ -33,7 +33,7 @@ def test_context_basic():
         pass
 
     with bs.backend_opts(prioritize=("FloatWithContext",)):
-        _, (ctx, *args), kwargs = dummy_func(float_subclass(1.0))
+        _, (ctx, *_args), _kwargs = dummy_func(float_subclass(1.0))
         assert ctx.name == "FloatWithContext"
         assert set(ctx.types) == {float_subclass}
         assert ctx.dispatch_args == (float_subclass(1.0),)
@@ -41,7 +41,7 @@ def test_context_basic():
 
     with bs.backend_opts(type=float):
         # No argument, works if explicitly prioritized...
-        _, (ctx, *args), kwargs = dummy_func()
+        _, (ctx, *_args), _kwargs = dummy_func()
         assert ctx.name == "FloatWithContext"
         assert set(ctx.types) == {float}
         assert ctx.dispatch_args == ()
