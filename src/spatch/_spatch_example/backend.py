@@ -43,3 +43,27 @@ def divide2(x, y):
 @backend2.set_should_run(divide2)
 def _(info, x, y):
     return True
+
+
+class StatefulClassImpl:
+    @backend1.implements("spatch._spatch_example.library:StatefulClass.apply")
+    @classmethod
+    def _from_apply(cls, original_self, x, y):
+        impl = cls()
+        impl.method = original_self.method
+        return impl
+
+    def apply(self, x, y):
+        if self.method == "add":
+            res = x + y
+        elif self.method == "sub":
+            res = x - y
+        else:
+            raise ValueError(f"Unknown method: {self.method}")
+
+        self._last_result = res
+        return res
+
+    @property
+    def last_result(self):
+        return self._last_result

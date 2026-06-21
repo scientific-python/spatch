@@ -731,6 +731,27 @@ class BackendSystem:
 
         return wrap_callable
 
+    def stateful_dispatching(self, dispatch_args=None, *, module=None, qualname=None):
+        """
+        Mark a method as a stateful dispatching one.
+
+        Mark a method on a class as one that initiates stateful dispatching, i.e.
+        when this method is called, it will dispatch if dispatching has not yet happened.
+
+        See `~spatch.backend_system.BackendSystem.dispatchable` for information about
+        arguments.
+        """
+        def wrap_callable(func):
+            @functools.wraps(func)
+            def no_impl_dispatching(*args, **kwargs):
+                return None
+
+            disp = Dispatchable(self, no_impl_dispatching, dispatch_args)
+            func._spatch_implementation_dispatcher = disp
+            return func
+
+        return wrap_callable
+
     @functools.cached_property
     def backend_opts(self):
         """Property returning a :py:class:`BackendOpts` class specific to this library
@@ -1031,3 +1052,66 @@ class Dispatchable:
             call_trace.append(("default fallback", "called"))
 
         return self._default_func(*args, **kwargs)
+
+
+class DispatchableMethod:
+    def __init__(self, state_name, method_name, original_method, dispatcher=None):
+        # TODO: need backendsystem, although only for tracing?
+        self._dispatcher = getattr(original_method, "_spatch_implementation_dispatcher", None)
+        self._state_name = state_name
+        self._method_name = method_name
+        self.__wrapped__ = original_method
+        # add docs, etc.
+
+    def __get__(self, obj, objtype=None):
+        if obj is None:
+            return self
+        return MethodType(self, obj)
+
+    def __call__(self, original_self, *args, **kwargs):
+        state = getattr(original_self, self._state_name)
+        if state is NotImplemented:
+            if self._dispatcher is None:
+                state = None  # No implementation bound yet.
+            else:
+                state = self._dispatcher(original_self, *args, **kwargs)
+                setattr(original_self, self._state_name, state)
+
+        if state is None:
+            return self.__wrapped__(original_self, *args, **kwargs)
+
+        return getattr(state, self._method_name)(*args, **kwargs)
+
+
+class DispatchableProperty(property):
+    def __init__(self, state_name, property_name, original_property):
+        self._state_name = state_name
+        self._property_name = property_name
+        self.__wrapped__ = original_property
+        # documentation?
+
+    def __get__(self, instance, owner=None):
+        if instance is None:
+            return self
+        state = getattr(instance, self._state_name)
+        return getattr(state, self._property_name)
+
+    def __set__(self, instance, value):
+        state = getattr(instance, self._state_name)
+        setattr(state, self._property_name, value)
+
+
+def dispatchable_stateful_class(state_name="_implementation"):
+    def decorator(cls):
+        setattr(cls, state_name, NotImplemented)
+
+        for name, attr in cls.__dict__.items():
+            if name.startswith("_") and not hasattr(attr, "_spatch_implementation_dispatcher"):
+                continue
+            elif callable(attr):
+                setattr(cls, name, DispatchableMethod(state_name, name, attr))
+            elif isinstance(attr, property):
+                setattr(cls, name, DispatchableProperty(state_name, name, attr))
+        return cls
+
+    return decorator
